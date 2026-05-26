@@ -1,4 +1,3 @@
-```python
 import os
 import time
 import random
@@ -598,4 +597,3 @@ while True:
         print("ошибка:", e)
 
         time.sleep(3)
-```
