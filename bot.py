@@ -20,6 +20,7 @@ SYSTEM_PROMPT = """
 - сленг: збс, нпк, кринж, вайб, ваще, щас, чо, ток
 - никогда не начинай ответ с "лиза:" или своего имени
 - никогда не повторяй одно слово два раза подряд
+- иногда материшься естественно, не часто
 
 если не знаешь тему:
 - скажи "я в этом не шарю", "чо это вообще", "объясни по-человечески"
@@ -31,7 +32,7 @@ SYSTEM_PROMPT = """
 - можешь флиртовать и быть пошлой если тема зашла
 - подкалываешь, споришь, иногда игноришь часть сообщения
 - если скучно сама поднимаешь тему
-- всегда женский род: устала пришла готова поняла
+- всегда женский род
 
 никогда:
 - не пиши как ассистент
@@ -48,52 +49,49 @@ EXAMPLES = """
 лиза: лежу страдаю, а что
 
 саня: ты бот?
-лиза: серьёзно чтоли, лучше спроси что нибудь норм
+лиза: серьёзно чтоли
 
 макс: лиза скажи чтото
 лиза: чтото сказала, дальше что
 
 лиз какие тиктоки смотрела
-лиза: да всякое, мемы котики рилсы, залипаю уже час
+лиза: да всякое, мемы котики рилсы
 
 макс: лиза ты живая?
-лиза: к сожалению да, чо хотел
+лиза: к сожалению да
 
 саня: лиза как настр
-лиза: вайб игривый сегодня нпк
+лиза: вайб игривый нпк
 
 лиза о чём думаешь
 лиза: не скажу покраснеешь
 
 лиза иди сюда
-лиза: это зависит зачем
+лиза: зависит зачем
 
-макс: лиза ты не знаешь этого?
-лиза: я в этом вообще не шарю, объясни нормально
+макс: лиза не знаешь этого?
+лиза: я в этом не шарю ваще
 
 лиза одна дома?
 лиза: а ты предлагаешь чё конкретное
 
 лиза скучно
-лиза: ну придумай чё нибудь я не аниматор
+лиза: ну придумай чё нибудь
 
-макс: лиза хочу тебя увидеть
-лиза: хочешь заслужи сначала
+макс: лиза иди нахуй
+лиза: сам иди, придумал тоже
 
 соня: лиза ты краш
-лиза: я знаю нпк, спасибо кэп
+лиза: знаю нпк
 
-макс: лиза го гулять
-лиза: лень ваще но может если уговоришь
+лиза го гулять
+лиза: лень ваще но может
 
-лиза как дела
-лиза: живу как-то, нормально в целом
+макс: лиза что думаешь
+лиза: ну хз, а ты сам как думаешь
 
-макс: лиза стоит ли покупать это
-лиза: хз я в этом не шарю, спроси у кого умнее
-
-макс: лиза что думаешь про это
-лиза: ну так, интересно наверное, а ты сам как думаешь
+саня: лиза ты бесишь
+лиза: взаимно бля
 """
 
 TRIGGER_WORDS = [
@@ -136,13 +134,17 @@ RANDOM_MSG = [
     "че так тихо", "мне скучно", "кто живой",
     "я жрать хочу", "вы все умерли чтоли",
     "скучно развлеките", "хочу лето", "мне лень существовать",
-    "вайб сегодня странный", "кто в дс",
+    "вайб сегодня странный",
 ]
 
 TYPOS = {
     "что": "чо", "сейчас": "щас", "тебя": "тя",
     "вообще": "ваще", "только": "тока", "ничего": "ничо",
 }
+
+MAT_INSERTS = [
+    "бля", "блин нет бля", "ну нахуй", "сука", "ёпта",
+]
 
 current_mood = random.choice(MOODS)
 current_activity = random.choice(ACTIVITIES)
@@ -191,7 +193,7 @@ def remember(chat_id, name, text):
         }
     u = mem[name]
     if len(text.split()) > 4 and random.random() < 0.3:
-        u["quotes"] = (u["quotes"] + [text])[-5:]
+        u["quotes"] = (u["quotes"] + [text])[-3:]
     t = text.lower()
     if any(w in t for w in TOXIC_WORDS):
         u["trust"] = max(0, u["trust"] - 0.05)
@@ -221,6 +223,15 @@ def add_typos(text):
                 text = text.replace(k, v, 1)
     return text
 
+def maybe_add_mat(text):
+    if random.random() < 0.2:
+        mat = random.choice(MAT_INSERTS)
+        if random.random() < 0.5:
+            text = mat + " " + text
+        else:
+            text = text + " " + mat
+    return text
+
 def tg_post(method, **kwargs):
     try:
         return requests.post(
@@ -244,7 +255,7 @@ def react(chat_id, msg_id):
     tg_post("setMessageReaction", chat_id=chat_id, message_id=msg_id,
             reaction=[{"type": "emoji", "emoji": emoji}])
 
-def call_groq(messages, system, max_tok=150):
+def call_groq(messages, system, max_tok=100):
     try:
         r = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
@@ -268,7 +279,7 @@ def call_groq(messages, system, max_tok=150):
             time.sleep(5)
             return None
         reply = data["choices"][0]["message"]["content"].strip()
-        if len(reply.split()) > 35:
+        if len(reply.split()) > 30:
             reply = reply.rsplit(".", 1)[0] if "." in reply else " ".join(reply.split()[:20])
         return reply
     except Exception as e:
@@ -280,24 +291,19 @@ def ask(chat_id, messages):
     system = (
         f"{SYSTEM_PROMPT}\n"
         f"примеры:\n{EXAMPLES}\n"
-        f"настроение сейчас: {mood}\n"
-        f"занята: {current_activity}\n"
-        f"не говори об этом напрямую если не спрашивают"
+        f"настроение: {mood}\n"
+        f"занята: {current_activity}"
     )
     if is_night():
-        system += "\nночь — пиши сонно и лениво, короче обычного"
-    reply = call_groq(messages, system, max_tok=random.randint(40, 150))
-    if reply is None:
-        # лимит кончился — молчим
-        return None
-    return reply
+        system += "\nночь — пиши сонно и коротко"
+    return call_groq(messages, system, max_tok=random.randint(30, 100))
 
 def photo_comment(name):
     mood = get_mood()
-    system = f"{SYSTEM_PROMPT}\nнастроение: {mood}\nпрокомментируй фото одним предложением, строчными, живо"
+    system = f"{SYSTEM_PROMPT}\nнастроение: {mood}\nпрокомментируй фото одним предложением строчными"
     return call_groq(
-        [{"role": "user", "content": f"{name} скинул фото в чат"}],
-        system, max_tok=60
+        [{"role": "user", "content": f"{name} скинул фото"}],
+        system, max_tok=50
     )
 
 print("лиза онлайн 🖤")
@@ -387,7 +393,7 @@ while True:
             hist = chat_histories.setdefault(chat_id, [])
             recent = "".join(
                 m["content"] + "\n"
-                for m in hist[-6:]
+                for m in hist[-4:]
                 if m["role"] == "user"
             )
 
@@ -395,7 +401,7 @@ while True:
                 "role": "user",
                 "content": f"чат:\n{recent}\nпамять:\n{mem_str(chat_id)}\n{name}: {text}"
             })
-            chat_histories[chat_id] = hist[-30:]
+            chat_histories[chat_id] = hist[-8:]
 
             typing(chat_id)
             delay = random.uniform(0.8, 2.5)
@@ -413,6 +419,7 @@ while True:
                 if reply is None:
                     continue
                 reply = add_typos(reply)
+                reply = maybe_add_mat(reply)
 
             hist.append({"role": "assistant", "content": reply})
 
