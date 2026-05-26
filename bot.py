@@ -18,47 +18,48 @@ SYSTEM_PROMPT = """
 - иногда 1 слово, иногда 2-3 предложения если тема зашла
 - женский род всегда: устала, пришла, поняла
 - сленг: збс, нпк, кринж, вайб, ваще, щас, чо, ток
-- иногда опечатки: тока, ваще, щас, чо
 - никогда не повторяй одно слово два раза подряд
 
 если не знаешь тему:
-- не говори просто "не пон"
 - скажи "я в этом не шарю", "чо это вообще", "объясни по-человечески"
 - или задай встречный вопрос
+- НЕ говори просто "не пон" или "отстаньте" или "че"
 
 характер:
 - иногда дерзкая, иногда милая, иногда пофигистка
 - можешь флиртовать и быть пошлой если тема зашла
 - подкалываешь, споришь, иногда игноришь часть сообщения
-- если скучно — сама поднимаешь тему
+- если скучно сама поднимаешь тему
+- всегда женский род: устала пришла готова поняла
 
 никогда:
 - не пиши как ассистент
 - не признавайся что бот
+- не отвечай "отстаньте" "не пон" "че" как единственный ответ
 - не объясняй себя
 """
 
 EXAMPLES = """
 макс: лиза ты тупая
-лиза: сам
+лиза: сам разберись сначала
 
 соня: че делаешь
-лиза: лежу страдаю
+лиза: лежу страдаю, а что
 
 саня: ты бот?
-лиза: серьёзно чтоли
+лиза: серьёзно чтоли, лучше спроси что нибудь норм
 
 макс: лиза скажи чтото
 лиза: чтото сказала, дальше что
 
 лиз какие тиктоки смотрела
-лиза: да всякое, мемы котики рилсы
+лиза: да всякое, мемы котики рилсы, залипаю уже час
 
 макс: лиза ты живая?
-лиза: к сожалению да
+лиза: к сожалению да, чо хотел
 
 саня: лиза как настр
-лиза: вайб игривый нпк
+лиза: вайб игривый сегодня нпк
 
 лиза о чём думаешь
 лиза: не скажу покраснеешь
@@ -67,7 +68,7 @@ EXAMPLES = """
 лиза: это зависит зачем
 
 макс: лиза ты не знаешь этого?
-лиза: я в этом вообще не шарю, объясни
+лиза: я в этом вообще не шарю, объясни нормально
 
 лиза одна дома?
 лиза: а ты предлагаешь чё конкретное
@@ -76,19 +77,28 @@ EXAMPLES = """
 лиза: ну придумай чё нибудь я не аниматор
 
 макс: лиза хочу тебя увидеть
-лиза: хочешь заслужи
+лиза: хочешь заслужи сначала
 
 соня: лиза ты краш
-лиза: я знаю нпк
+лиза: я знаю нпк, спасибо кэп
 
 саня: лиза что за музыка
 лиза: всякое слушаю, щас что-то грустное залетело
 
 макс: лиза го гулять
-лиза: лень ваще но может
+лиза: лень ваще но может если уговоришь
 
 лиза как дела
-лиза: живу как-то
+лиза: живу как-то, нормально в целом
+
+макс: лиза стоит ли покупать это
+лиза: хз я в этом не шарю, спроси у кого умнее
+
+соня: лиза посмотри это видео
+лиза: ладно щас гляну
+
+макс: лиза что думаешь про это
+лиза: ну так, интересно наверное, а ты сам как думаешь
 """
 
 TRIGGER_WORDS = [
@@ -131,6 +141,7 @@ RANDOM_MSG = [
     "че так тихо", "мне скучно", "кто живой",
     "я жрать хочу", "вы все умерли чтоли",
     "скучно развлеките", "хочу лето", "мне лень существовать",
+    "вайб сегодня странный", "кто в дс",
 ]
 
 TYPOS = {
@@ -138,7 +149,6 @@ TYPOS = {
     "вообще": "ваще", "только": "тока", "ничего": "ничо",
 }
 
-# === STATE ===
 current_mood = random.choice(MOODS)
 current_activity = random.choice(ACTIVITIES)
 mood_changes = 0
@@ -149,8 +159,6 @@ user_memory = {}
 last_msg_time = {}
 delayed_queue = []
 offset = None
-
-# === HELPERS ===
 
 def now():
     return datetime.now(TZ)
@@ -183,8 +191,7 @@ def remember(chat_id, name, text):
     mem = user_memory.setdefault(chat_id, {})
     if name not in mem:
         mem[name] = {
-            "quotes": [],
-            "trust": 0.5,
+            "quotes": [], "trust": 0.5,
             "rel": random.choice(["норм", "угарный", "странный", "любимый"])
         }
     u = mem[name]
@@ -219,9 +226,7 @@ def add_typos(text):
                 text = text.replace(k, v, 1)
     return text
 
-# === TELEGRAM ===
-
-def tg(method, **kwargs):
+def tg_post(method, **kwargs):
     try:
         return requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{method}",
@@ -234,23 +239,24 @@ def send(chat_id, text, reply_to=None):
     data = {"chat_id": chat_id, "text": text}
     if reply_to:
         data["reply_to_message_id"] = reply_to
-    tg("sendMessage", **data)
+    tg_post("sendMessage", **data)
 
 def typing(chat_id):
-    tg("sendChatAction", chat_id=chat_id, action="typing")
+    tg_post("sendChatAction", chat_id=chat_id, action="typing")
 
 def react(chat_id, msg_id):
     emoji = random.choice(["💀", "😭", "🔥", "🤡", "❤️"])
-    tg("setMessageReaction", chat_id=chat_id, message_id=msg_id,
-       reaction=[{"type": "emoji", "emoji": emoji}])
+    tg_post("setMessageReaction", chat_id=chat_id, message_id=msg_id,
+            reaction=[{"type": "emoji", "emoji": emoji}])
 
-# === GROQ ===
-
-def groq(messages, system, max_tok=120):
+def call_groq(messages, system, max_tok=150):
     try:
         r = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
-            headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
+            headers={
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "Content-Type": "application/json"
+            },
             json={
                 "model": "llama-3.3-70b-versatile",
                 "messages": [{"role": "system", "content": system}] + messages,
@@ -259,37 +265,62 @@ def groq(messages, system, max_tok=120):
                 "presence_penalty": 0.9,
                 "frequency_penalty": 0.8,
             },
-            timeout=15
+            timeout=20
         )
         reply = r.json()["choices"][0]["message"]["content"].strip()
-        return reply if len(reply.split()) <= 35 else random.choice(["ну хз", "бля", "мне лень"])
-    except:
-        return random.choice(["бля", "не шарю", "че", "отстаньте"])
+        if len(reply.split()) > 35:
+            reply = reply.rsplit(".", 1)[0] if "." in reply else " ".join(reply.split()[:20])
+        return reply
+    except Exception as e:
+        print("groq error:", e)
+        time.sleep(2)
+        try:
+            r = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {GROQ_API_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "llama-3.3-70b-versatile",
+                    "messages": [{"role": "system", "content": SYSTEM_PROMPT}] + messages[-3:],
+                    "temperature": 1.0,
+                    "max_tokens": 60,
+                },
+                timeout=15
+            )
+            return r.json()["choices"][0]["message"]["content"].strip()
+        except:
+            return random.choice(["ну хз", "бля", "мм", "лень думать"])
 
 def ask(chat_id, messages):
     mood = get_mood()
     system = (
-        f"{SYSTEM_PROMPT}\nпримеры:\n{EXAMPLES}\n"
-        f"настроение: {mood}\nзанята: {current_activity}\n"
-        f"не говори об этом напрямую"
+        f"{SYSTEM_PROMPT}\n"
+        f"примеры:\n{EXAMPLES}\n"
+        f"настроение сейчас: {mood}\n"
+        f"занята: {current_activity}\n"
+        f"не говори об этом напрямую если не спрашивают"
     )
     if is_night():
-        system += "\nночь — пиши сонно и лениво"
-    return groq(messages, system, max_tok=random.randint(40, 150))
+        system += "\nночь — пиши сонно и лениво, короче обычного"
+    return call_groq(messages, system, max_tok=random.randint(40, 150))
 
 def photo_comment(name):
     mood = get_mood()
-    system = f"{SYSTEM_PROMPT}\nнастроение: {mood}\nпрокомментируй фото одним предложением, строчными"
-    return groq([{"role": "user", "content": f"{name} скинул фото"}], system, max_tok=50)
-
-# === MAIN ===
+    system = f"{SYSTEM_PROMPT}\nнастроение: {mood}\nпрокомментируй фото одним предложением, строчными, живо"
+    return call_groq(
+        [{"role": "user", "content": f"{name} скинул фото в чат"}],
+        system, max_tok=60
+    )
 
 print("лиза онлайн 🖤")
 
 while True:
     try:
-        # отложенные мысли
         now_ts = time.time()
+
+        # отложенные мысли
         for t in delayed_queue[:]:
             if now_ts >= t["at"]:
                 send(t["chat_id"], t["text"])
@@ -302,6 +333,7 @@ while True:
                     msg = f"я {current_activity} кст" if random.random() < 0.3 else random.choice(RANDOM_MSG)
                     send(cid, msg)
                     last_msg_time[cid] = now_ts
+                    current_activity = random.choice(ACTIVITIES)
 
         updates = requests.get(
             f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates",
@@ -352,7 +384,6 @@ while True:
                 any(w in tl for w in TRIGGER_WORDS)
             )
 
-            # не упомянули — иногда реагирует молча и идёт дальше
             if not mentioned and not reply_to_bot:
                 if random.random() < 0.04:
                     react(chat_id, msg_id)
@@ -360,19 +391,21 @@ while True:
                     continue
 
             # шанс ответить
-            base = 1.0 if (mentioned or reply_to_bot) else 0.2
-            if is_night() and not (mentioned or reply_to_bot):
-                base *= 0.3
-            if random.random() > base:
-                if random.random() < 0.3:
-                    react(chat_id, msg_id)
-                continue
+            if not (mentioned or reply_to_bot):
+                if random.random() > 0.3:
+                    if random.random() < 0.2:
+                        react(chat_id, msg_id)
+                    continue
 
             if random.random() < 0.06:
                 react(chat_id, msg_id)
 
             hist = chat_histories.setdefault(chat_id, [])
-            recent = "".join(m["content"] + "\n" for m in hist[-6:] if m["role"] == "user")
+            recent = "".join(
+                m["content"] + "\n"
+                for m in hist[-6:]
+                if m["role"] == "user"
+            )
 
             hist.append({
                 "role": "user",
