@@ -258,7 +258,7 @@ def call_groq(messages, system, max_tok=150):
                 "Content-Type": "application/json"
             },
             json={
-                "model": "llama-3.3-70b-versatile",
+                "model": "llama-3.1-8b-instant",
                 "messages": [{"role": "system", "content": system}] + messages,
                 "temperature": 1.1,
                 "max_tokens": max_tok,
@@ -282,7 +282,7 @@ def call_groq(messages, system, max_tok=150):
                     "Content-Type": "application/json"
                 },
                 json={
-                    "model": "llama-3.3-70b-versatile",
+                    "model": "llama-3.1-8b-instant",
                     "messages": [{"role": "system", "content": SYSTEM_PROMPT}] + messages[-3:],
                     "temperature": 1.0,
                     "max_tokens": 60,
