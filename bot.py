@@ -5,7 +5,7 @@ import requests
 from datetime import datetime, timezone, timedelta
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
 BOT_USERNAME = "RbIjbIK_bot"
 TZ = timezone(timedelta(hours=5))
@@ -244,42 +244,36 @@ def react(chat_id, msg_id):
     tg_post("setMessageReaction", chat_id=chat_id, message_id=msg_id,
             reaction=[{"type": "emoji", "emoji": emoji}])
 
-def call_gemini(messages, system, max_tok=150):
+def call_groq(messages, system, max_tok=150):
     try:
-        # конвертируем историю в формат Gemini
-        contents = []
-        for m in messages:
-            role = "user" if m["role"] == "user" else "model"
-            contents.append({
-                "role": role,
-                "parts": [{"text": m["content"]}]
-            })
-
         r = requests.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}",
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "Content-Type": "application/json"
+            },
             json={
-                "system_instruction": {"parts": [{"text": system}]},
-                "contents": contents,
-                "generationConfig": {
-                    "temperature": 1.1,
-                    "maxOutputTokens": max_tok,
-                    "topP": 0.95,
-                }
+                "model": "llama-3.3-70b-versatile",
+                "messages": [{"role": "system", "content": system}] + messages,
+                "temperature": 1.1,
+                "max_tokens": max_tok,
+                "presence_penalty": 0.9,
+                "frequency_penalty": 0.8,
             },
             timeout=20
         )
         data = r.json()
-        if "candidates" not in data:
-            print("gemini error:", data)
-            time.sleep(3)
-            return random.choice(["ну хз", "мм", "бля"])
-        reply = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+        if "choices" not in data:
+            print("groq no choices:", data)
+            time.sleep(5)
+            return None
+        reply = data["choices"][0]["message"]["content"].strip()
         if len(reply.split()) > 35:
             reply = reply.rsplit(".", 1)[0] if "." in reply else " ".join(reply.split()[:20])
         return reply
     except Exception as e:
-        print("gemini error:", e)
-        return random.choice(["ну хз", "мм", "бля"])
+        print("groq error:", e)
+        return None
 
 def ask(chat_id, messages):
     mood = get_mood()
@@ -292,12 +286,16 @@ def ask(chat_id, messages):
     )
     if is_night():
         system += "\nночь — пиши сонно и лениво, короче обычного"
-    return call_gemini(messages, system, max_tok=random.randint(40, 150))
+    reply = call_groq(messages, system, max_tok=random.randint(40, 150))
+    if reply is None:
+        # лимит кончился — молчим
+        return None
+    return reply
 
 def photo_comment(name):
     mood = get_mood()
     system = f"{SYSTEM_PROMPT}\nнастроение: {mood}\nпрокомментируй фото одним предложением, строчными, живо"
-    return call_gemini(
+    return call_groq(
         [{"role": "user", "content": f"{name} скинул фото в чат"}],
         system, max_tok=60
     )
@@ -344,9 +342,11 @@ while True:
             last_msg_time[chat_id] = time.time()
 
             if msg.get("photo") and random.random() < 0.35:
-                typing(chat_id)
-                time.sleep(random.uniform(1.5, 3.0))
-                send(chat_id, photo_comment(name), reply_to=msg_id)
+                comment = photo_comment(name)
+                if comment:
+                    typing(chat_id)
+                    time.sleep(random.uniform(1.5, 3.0))
+                    send(chat_id, comment, reply_to=msg_id)
                 continue
 
             if not text:
@@ -409,7 +409,10 @@ while True:
             elif is_night() and random.random() < 0.35:
                 reply = random.choice(SLEEPY)
             else:
-                reply = add_typos(ask(chat_id, chat_histories[chat_id]))
+                reply = ask(chat_id, chat_histories[chat_id])
+                if reply is None:
+                    continue
+                reply = add_typos(reply)
 
             hist.append({"role": "assistant", "content": reply})
 
