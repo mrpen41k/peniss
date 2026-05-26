@@ -5,21 +5,20 @@ import requests
 from datetime import datetime, timezone, timedelta
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 BOT_USERNAME = "RbIjbIK_bot"
 TZ = timezone(timedelta(hours=5))
 
 SYSTEM_PROMPT = """
-
 ты лиза, 20 лет, девушка в групповом чате с друзьями
 
 как пишешь:
-- никогда не начинай сообщение с "лиза:" или своего имени
 - строчными, коротко
 - иногда 1 слово, иногда 2-3 предложения если тема зашла
 - женский род всегда: устала, пришла, поняла
 - сленг: збс, нпк, кринж, вайб, ваще, щас, чо, ток
+- никогда не начинай ответ с "лиза:" или своего имени
 - никогда не повторяй одно слово два раза подряд
 
 если не знаешь тему:
@@ -84,9 +83,6 @@ EXAMPLES = """
 соня: лиза ты краш
 лиза: я знаю нпк, спасибо кэп
 
-саня: лиза что за музыка
-лиза: всякое слушаю, щас что-то грустное залетело
-
 макс: лиза го гулять
 лиза: лень ваще но может если уговоришь
 
@@ -95,9 +91,6 @@ EXAMPLES = """
 
 макс: лиза стоит ли покупать это
 лиза: хз я в этом не шарю, спроси у кого умнее
-
-соня: лиза посмотри это видео
-лиза: ладно щас гляну
 
 макс: лиза что думаешь про это
 лиза: ну так, интересно наверное, а ты сам как думаешь
@@ -251,49 +244,42 @@ def react(chat_id, msg_id):
     tg_post("setMessageReaction", chat_id=chat_id, message_id=msg_id,
             reaction=[{"type": "emoji", "emoji": emoji}])
 
-def call_groq(messages, system, max_tok=150):
+def call_gemini(messages, system, max_tok=150):
     try:
+        # конвертируем историю в формат Gemini
+        contents = []
+        for m in messages:
+            role = "user" if m["role"] == "user" else "model"
+            contents.append({
+                "role": role,
+                "parts": [{"text": m["content"]}]
+            })
+
         r = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {GROQ_API_KEY}",
-                "Content-Type": "application/json"
-            },
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}",
             json={
-                "model": "llama-3.1-8b-instant",
-                "messages": [{"role": "system", "content": system}] + messages,
-                "temperature": 1.1,
-                "max_tokens": max_tok,
-                "presence_penalty": 0.9,
-                "frequency_penalty": 0.8,
+                "system_instruction": {"parts": [{"text": system}]},
+                "contents": contents,
+                "generationConfig": {
+                    "temperature": 1.1,
+                    "maxOutputTokens": max_tok,
+                    "topP": 0.95,
+                }
             },
             timeout=20
         )
-        reply = r.json()["choices"][0]["message"]["content"].strip()
+        data = r.json()
+        if "candidates" not in data:
+            print("gemini error:", data)
+            time.sleep(3)
+            return random.choice(["ну хз", "мм", "бля"])
+        reply = data["candidates"][0]["content"]["parts"][0]["text"].strip()
         if len(reply.split()) > 35:
             reply = reply.rsplit(".", 1)[0] if "." in reply else " ".join(reply.split()[:20])
         return reply
     except Exception as e:
-        print("groq error:", e)
-        time.sleep(2)
-        try:
-            r = requests.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {GROQ_API_KEY}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": "llama-3.1-8b-instant",
-                    "messages": [{"role": "system", "content": SYSTEM_PROMPT}] + messages[-3:],
-                    "temperature": 1.0,
-                    "max_tokens": 60,
-                },
-                timeout=15
-            )
-            return r.json()["choices"][0]["message"]["content"].strip()
-        except:
-            return random.choice(["ну хз", "бля", "мм", "лень думать"])
+        print("gemini error:", e)
+        return random.choice(["ну хз", "мм", "бля"])
 
 def ask(chat_id, messages):
     mood = get_mood()
@@ -306,12 +292,12 @@ def ask(chat_id, messages):
     )
     if is_night():
         system += "\nночь — пиши сонно и лениво, короче обычного"
-    return call_groq(messages, system, max_tok=random.randint(40, 150))
+    return call_gemini(messages, system, max_tok=random.randint(40, 150))
 
 def photo_comment(name):
     mood = get_mood()
     system = f"{SYSTEM_PROMPT}\nнастроение: {mood}\nпрокомментируй фото одним предложением, строчными, живо"
-    return call_groq(
+    return call_gemini(
         [{"role": "user", "content": f"{name} скинул фото в чат"}],
         system, max_tok=60
     )
@@ -322,13 +308,11 @@ while True:
     try:
         now_ts = time.time()
 
-        # отложенные мысли
         for t in delayed_queue[:]:
             if now_ts >= t["at"]:
                 send(t["chat_id"], t["text"])
                 delayed_queue.remove(t)
 
-        # пишет сама если тихо
         for cid, lt in list(last_msg_time.items()):
             if not is_night() and now_ts - lt > random.randint(1800, 5400):
                 if random.random() < 0.12:
@@ -359,7 +343,6 @@ while True:
 
             last_msg_time[chat_id] = time.time()
 
-            # фото
             if msg.get("photo") and random.random() < 0.35:
                 typing(chat_id)
                 time.sleep(random.uniform(1.5, 3.0))
@@ -392,7 +375,6 @@ while True:
                 if random.random() > 0.06:
                     continue
 
-            # шанс ответить
             if not (mentioned or reply_to_bot):
                 if random.random() > 0.3:
                     if random.random() < 0.2:
@@ -421,7 +403,6 @@ while True:
                 delay += random.uniform(2, 4)
             time.sleep(delay)
 
-            # выбор ответа
             q = get_quote()
             if q and not (mentioned or reply_to_bot) and random.random() < 0.4:
                 reply = q
@@ -432,7 +413,6 @@ while True:
 
             hist.append({"role": "assistant", "content": reply})
 
-            # двойное сообщение
             if random.random() < 0.07:
                 f, s = random.choice(DOUBLE_MSG)
                 send(chat_id, f)
@@ -443,7 +423,6 @@ while True:
             else:
                 send(chat_id, reply, reply_to=msg_id if random.random() < 0.65 else None)
 
-            # отложенная мысль
             if user_memory.get(chat_id) and random.random() < 0.05:
                 n = random.choice(list(user_memory[chat_id].keys()))
                 delayed_queue.append({
