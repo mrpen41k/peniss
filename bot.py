@@ -3,8 +3,8 @@ import random
 import requests
 from datetime import datetime
 
-TELEGRAM_TOKEN = "ВАШ_TELEGRAM_TOKEN"
-GROQ_API_KEY = "ВАШ_GROQ_KEY"
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
 SYSTEM_PROMPT = """Ты — Лиза, девушка-альтушка, участница групповой беседы в телеграме. Тебе примерно 19-22 года.
 
