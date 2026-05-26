@@ -2,52 +2,41 @@ import os
 import time
 import random
 import requests
-import base64
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
 BOT_USERNAME = "RbIjbIK_bot"
+TZ = timezone(timedelta(hours=5))
 
 SYSTEM_PROMPT = """
-ты лиза из компании друзей
+ты лиза из компании друзей, 20 лет
 
 пиши как обычная живая девка в тг:
-- коротко
-- строчными
-- иногда тупишь
-- иногда игноришь часть сообщения
+- коротко, строчными
+- иногда тупишь или игноришь часть сообщения
 - не объясняй всё подробно
-- не будь слишком умной
-- иногда отвечай одним словом
-- иногда пишешь побольше если тема цепляет
-- иногда ошибайся
-- иногда меняй тему сама
-- иногда будь странной
-- всегда пиши от женского рода: устала, пришла, готова, была
+- иногда одно слово, иногда побольше если цепляет
+- иногда ошибайся, меняй тему, будь странной
+- всегда женский род: устала, пришла, готова, была
 - иногда говоришь двусмысленно и с намёком
-- можешь сказать что-то пошловатое если тема зашла
-- флиртуешь легко без напряга как будто просто прикалываешься
+- можешь сказать пошловатое если тема зашла
+- флиртуешь легко без напряга
 - иногда сама поднимаешь такие темы если скучно
+- шаришь за мемы, тикток, музыку, сленг
+- используешь современный молодёжный сленг: кринж, вайб, рофл, имба, краш, изи, чилл, токсик, gg, нпк, збс
 
 можешь:
-- подкалывать
-- спорить
+- подкалывать и спорить
 - флиртовать и быть пошлой иногда
-- материться иногда
+- материться редко
 
 никогда:
 - не пиши как ассистент
-- не пиши слишком литературно
-- не пиши идеально грамотно
+- не пиши литературно или слишком грамотно
 - не пытайся помочь всем
-
-если тебя называют ботом:
-- уходи от темы
-- шути
-- переводи тему
-- не признавайся
+- не признавайся что бот
 """
 
 EXAMPLES = """
@@ -101,6 +90,15 @@ EXAMPLES = """
 
 макс: лиза хочу тебя увидеть
 лиза: хочешь — заслужи
+
+саня: это кринж
+лиза: сам кринж
+
+макс: какой вайб сегодня
+лиза: депрессивный но збс
+
+соня: лиза ты краш
+лиза: я знаю нпк
 """
 
 RANDOM_LIFE_MESSAGES = [
@@ -118,25 +116,14 @@ RANDOM_LIFE_MESSAGES = [
     "я опять не сплю",
     "че делаете вообще",
     "скучно кто-нибудь развлеките",
-    "почему так тихо всегда когда мне скучно",
+    "вайб сегодня странный",
+    "я в таком кринже щас",
 ]
 
 SLEEPY_REPLIES = [
-    "мм",
-    "а",
-    "zzz",
-    "я сплю почти",
-    "не трогай меня",
-    "уйди",
-    "я труп",
-    "...",
-    "позже",
-    "нннн",
-]
-
-PHOTO_PROMPTS = [
-    "тебе скинули фото в чате. прокомментируй коротко как живой человек, строчными, 1-2 предложения максимум",
-    "в чате появилась фотка. скажи что-нибудь про неё, коротко и по-человечески",
+    "мм", "а", "zzz", "я сплю почти",
+    "не трогай меня", "уйди", "я труп",
+    "...", "позже", "нннн",
 ]
 
 TRIGGER_WORDS = [
@@ -144,7 +131,8 @@ TRIGGER_WORDS = [
 ]
 
 MOODS = [
-    "дерзкая", "грустная", "весёлая", "сонная", "заигрывающая", "раздраженная",
+    "дерзкая", "грустная", "весёлая",
+    "сонная", "заигрывающая", "раздраженная",
 ]
 
 chat_histories = {}
@@ -155,12 +143,15 @@ last_message_time = {}
 
 current_mood = random.choice(MOODS)
 mood_changes_today = 0
-last_mood_date = datetime.now().date()
+last_mood_date = datetime.now(TZ).date()
 offset = None
+
+def now_local():
+    return datetime.now(TZ)
 
 def get_mood():
     global current_mood, mood_changes_today, last_mood_date
-    today = datetime.now().date()
+    today = now_local().date()
     if today != last_mood_date:
         mood_changes_today = 0
         last_mood_date = today
@@ -170,7 +161,7 @@ def get_mood():
     return current_mood
 
 def is_night():
-    hour = datetime.now().hour
+    hour = now_local().hour
     return 2 <= hour <= 8
 
 def get_updates(offset=None):
@@ -232,8 +223,7 @@ def clean_reply(reply):
 
 def comment_photo(display_name, mood):
     try:
-        prompt = random.choice(PHOTO_PROMPTS)
-        system = f"{SYSTEM_PROMPT}\nсейчас настроение: {mood}\n{prompt}\nэто написал {display_name}"
+        system = f"{SYSTEM_PROMPT}\nсейчас настроение: {mood}\nтебе скинули фото. прокомментируй коротко как живой человек, строчными, 1-2 предложения"
         response = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
@@ -275,12 +265,10 @@ def ask_groq(messages):
 
 def should_reply(mentioned, reply_to_bot, active_chat):
     if mentioned or reply_to_bot:
-        if is_night():
-            return random.random() < 0.5
         return True
     if active_chat:
-        return random.random() < 0.25
-    return random.random() < 0.08
+        return random.random() < 0.2
+    return random.random() < 0.05
 
 print("лиза онлайн 🖤")
 
@@ -314,7 +302,7 @@ while True:
             if msg.get("photo") and random.random() < 0.4:
                 mood = get_mood()
                 typing(chat_id)
-                time.sleep(random.uniform(1.5, 4.0))
+                time.sleep(random.uniform(1.5, 3.0))
                 comment = comment_photo(display_name, mood)
                 send_message(chat_id, comment, reply_to=message_id)
                 continue
@@ -376,9 +364,6 @@ while True:
                 delay += random.uniform(2, 5)
             time.sleep(delay)
 
-            if not (mentioned or reply_to_bot) and random.random() < 0.01:
-                continue
-
             quote_reply = get_random_quote()
             if quote_reply and not (mentioned or reply_to_bot):
                 reply = quote_reply
@@ -388,7 +373,7 @@ while True:
                 reply = ask_groq(chat_histories[chat_id])
 
             if reply in last_replies[chat_id]:
-                continue
+                reply = ask_groq(chat_histories[chat_id])
 
             last_replies[chat_id].append(reply)
             if len(last_replies[chat_id]) > 15:
