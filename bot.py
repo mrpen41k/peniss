@@ -11,23 +11,31 @@ BOT_USERNAME = "RbIjbIK_bot"
 TZ = timezone(timedelta(hours=5))
 
 SYSTEM_PROMPT = """
-ты лиза, 20 лет, из компании друзей
+ты лиза, 20 лет, девушка в групповом чате с друзьями
 
-пиши как реальный человек в тг:
-- коротко, строчными
-- без умного стиля
-- иногда тупишь, иногда игноришь часть фраз
-- иногда одно слово, иногда 2-3 предложения если зацепило
-- можешь спорить, подкалывать, флиртовать
-- иногда грубая, иногда милая, иногда пофигистка
-- всегда женский род: устала, пришла, готова
-- иногда пошлая и двусмысленная
-- используешь сленг: збс, нпк, кринж, вайб, ваще, щас, чо
+как пишешь:
+- строчными, коротко
+- иногда 1 слово, иногда 2-3 предложения если тема зашла
+- женский род всегда: устала, пришла, поняла
+- сленг: збс, нпк, кринж, вайб, ваще, щас, чо, ток
+- иногда опечатки: тока, ваще, щас, чо
+- никогда не повторяй одно слово два раза подряд
+
+если не знаешь тему:
+- не говори просто "не пон"
+- скажи "я в этом не шарю", "чо это вообще", "объясни по-человечески"
+- или задай встречный вопрос
+
+характер:
+- иногда дерзкая, иногда милая, иногда пофигистка
+- можешь флиртовать и быть пошлой если тема зашла
+- подкалываешь, споришь, иногда игноришь часть сообщения
+- если скучно — сама поднимаешь тему
 
 никогда:
-- не объясняй себя
-- не говори как ассистент
+- не пиши как ассистент
 - не признавайся что бот
+- не объясняй себя
 """
 
 EXAMPLES = """
@@ -35,37 +43,52 @@ EXAMPLES = """
 лиза: сам
 
 соня: че делаешь
-лиза: страдаю
+лиза: лежу страдаю
 
 саня: ты бот?
-лиза: ага щас
+лиза: серьёзно чтоли
 
-макс: лиза скучно
-лиза: ну придумай чё нибудь
+макс: лиза скажи чтото
+лиза: чтото сказала, дальше что
 
-соня: лиз
-лиза: а
-
-саня: ты где
-лиза: тут
+лиз какие тиктоки смотрела
+лиза: да всякое, мемы котики рилсы
 
 макс: лиза ты живая?
-лиза: не уверена
+лиза: к сожалению да
 
 саня: лиза как настр
 лиза: вайб игривый нпк
 
-макс: лиза что делаешь
-лиза: лежу думаю о всяком
-
-соня: о чём думаешь
+лиза о чём думаешь
 лиза: не скажу покраснеешь
 
-макс: лиза иди сюда
+лиза иди сюда
 лиза: это зависит зачем
 
-саня: лиза одна дома?
+макс: лиза ты не знаешь этого?
+лиза: я в этом вообще не шарю, объясни
+
+лиза одна дома?
 лиза: а ты предлагаешь чё конкретное
+
+лиза скучно
+лиза: ну придумай чё нибудь я не аниматор
+
+макс: лиза хочу тебя увидеть
+лиза: хочешь заслужи
+
+соня: лиза ты краш
+лиза: я знаю нпк
+
+саня: лиза что за музыка
+лиза: всякое слушаю, щас что-то грустное залетело
+
+макс: лиза го гулять
+лиза: лень ваще но может
+
+лиза как дела
+лиза: живу как-то
 """
 
 TRIGGER_WORDS = [
@@ -77,45 +100,37 @@ MOODS = [
     "весёлая", "весёлая", "весёлая",
     "игривая", "игривая",
     "пошлая и заигрывающая", "пошлая и заигрывающая",
-    "дерзкая",
-    "сонная",
-    "раздраженная",
-    "грустная",
+    "дерзкая", "сонная", "раздраженная", "грустная",
 ]
 
 ACTIVITIES = [
     "лежу", "смотрю тиктоки", "страдаю",
-    "ем", "ничего не делаю", "слушаю музыку", "в телефоне",
+    "ем", "ничего не делаю", "слушаю музыку",
 ]
 
 HORNY_WORDS = ["секс", "трах", "голая", "жопа", "хочу тебя", "пошл", "засос"]
 TOXIC_WORDS = ["иди нахуй", "ебанутая", "долбаеб", "заткнись"]
 FUNNY_WORDS = ["ахах", "ржу", "ору", "лол", "хахах"]
 
-SLEEPY_REPLIES = ["мм", "а", "zzz", "не трогай", "уйди", "...", "позже"]
+SLEEPY = ["мм", "а", "не трогай", "уйди", "...", "позже", "zzz"]
 
-DOUBLE_MESSAGES = [
+DOUBLE_MSG = [
     ("бля", "я ток щас поняла"),
     ("подожди", "не так поняла"),
     ("ааа", "дошло наконец"),
-    ("стоп", "это же про меня было"),
+    ("стоп", "это же про меня"),
 ]
 
-DELAYED_THOUGHTS = [
+DELAYED = [
     "бля я ток щас поняла че {name} сказал",
     "кст {name} ты вообще думаешь когда пишешь",
-    "всё думаю о том что {name} написал",
+    "всё думаю про то что {name} написал",
 ]
 
-RANDOM_LIFE_MESSAGES = [
-    "че так тихо",
-    "мне скучно",
-    "кто живой",
-    "я жрать хочу",
-    "хочу лето",
-    "мне лень существовать",
-    "вы все умерли чтоли",
-    "скучно развлеките",
+RANDOM_MSG = [
+    "че так тихо", "мне скучно", "кто живой",
+    "я жрать хочу", "вы все умерли чтоли",
+    "скучно развлеките", "хочу лето", "мне лень существовать",
 ]
 
 TYPOS = {
@@ -123,36 +138,38 @@ TYPOS = {
     "вообще": "ваще", "только": "тока", "ничего": "ничо",
 }
 
+# === STATE ===
 current_mood = random.choice(MOODS)
 current_activity = random.choice(ACTIVITIES)
-mood_changes_today = 0
-last_mood_date = datetime.now(TZ).date()
+mood_changes = 0
+last_mood_date = None
 
 chat_histories = {}
 user_memory = {}
-chat_state = {}
-last_message_time = {}
+last_msg_time = {}
 delayed_queue = []
 offset = None
 
-def now_local():
+# === HELPERS ===
+
+def now():
     return datetime.now(TZ)
 
 def is_night():
-    return 2 <= now_local().hour <= 8
+    return 2 <= now().hour <= 8
 
 def get_mood():
-    global current_mood, mood_changes_today, last_mood_date
-    today = now_local().date()
+    global current_mood, mood_changes, last_mood_date
+    today = now().date()
     if today != last_mood_date:
-        mood_changes_today = 0
+        mood_changes = 0
         last_mood_date = today
-    if mood_changes_today < 3 and random.random() < 0.07:
+    if mood_changes < 3 and random.random() < 0.07:
         current_mood = random.choice(MOODS)
-        mood_changes_today += 1
+        mood_changes += 1
     return current_mood
 
-def update_mood_from_text(text):
+def update_mood(text):
     global current_mood
     t = text.lower()
     if any(w in t for w in HORNY_WORDS):
@@ -162,49 +179,38 @@ def update_mood_from_text(text):
     elif any(w in t for w in FUNNY_WORDS):
         current_mood = "весёлая"
 
-def get_state(chat_id):
-    if chat_id not in chat_state:
-        chat_state[chat_id] = {"energy": random.uniform(0.4, 0.8)}
-    return chat_state[chat_id]
-
-def update_state(chat_id):
-    s = get_state(chat_id)
-    if random.random() < 0.1:
-        s["energy"] += random.uniform(-0.1, 0.1)
-    s["energy"] = max(0.1, min(1.0, s["energy"]))
-
 def remember(chat_id, name, text):
-    if chat_id not in user_memory:
-        user_memory[chat_id] = {}
-    if name not in user_memory[chat_id]:
-        user_memory[chat_id][name] = {
-            "quotes": [], "trust": 0.5, "flirt": 0.0,
-            "relationship": random.choice(["норм", "угарный", "странный", "любимый"])
+    mem = user_memory.setdefault(chat_id, {})
+    if name not in mem:
+        mem[name] = {
+            "quotes": [],
+            "trust": 0.5,
+            "rel": random.choice(["норм", "угарный", "странный", "любимый"])
         }
-    u = user_memory[chat_id][name]
+    u = mem[name]
     if len(text.split()) > 4 and random.random() < 0.3:
-        u["quotes"].append(text)
-        u["quotes"] = u["quotes"][-5:]
+        u["quotes"] = (u["quotes"] + [text])[-5:]
     t = text.lower()
     if any(w in t for w in TOXIC_WORDS):
-        u["trust"] -= 0.05
+        u["trust"] = max(0, u["trust"] - 0.05)
     if any(w in t for w in ["люб", "красив", "нрав"]):
-        u["flirt"] += 0.1
-        u["trust"] += 0.05
-    u["trust"] = max(0, min(1, u["trust"]))
+        u["trust"] = min(1, u["trust"] + 0.05)
     if random.random() < 0.1:
-        u["relationship"] = random.choice(["норм", "угарный", "странный"])
+        u["rel"] = random.choice(["норм", "угарный", "странный"])
 
 def get_quote():
-    all_quotes = []
-    for chat in user_memory.values():
-        for name, data in chat.items():
-            for q in data.get("quotes", []):
-                all_quotes.append((name, q))
-    if all_quotes and random.random() < 0.07:
-        name, q = random.choice(all_quotes)
+    all_q = [(n, q) for cd in user_memory.values()
+             for n, d in cd.items() for q in d.get("quotes", [])]
+    if all_q and random.random() < 0.07:
+        name, q = random.choice(all_q)
         return f"кст {name} ты же говорил что {q}"
     return None
+
+def mem_str(chat_id):
+    return "".join(
+        f"{n}: {d['rel']}\n"
+        for n, d in user_memory.get(chat_id, {}).items()
+    )
 
 def add_typos(text):
     if random.random() < 0.3:
@@ -213,16 +219,14 @@ def add_typos(text):
                 text = text.replace(k, v, 1)
     return text
 
-def build_memory_str(chat_id):
-    result = ""
-    for name, data in user_memory.get(chat_id, {}).items():
-        result += f"{name}: {data['relationship']}, trust={data['trust']:.1f}\n"
-    return result
+# === TELEGRAM ===
 
-def typing(chat_id):
+def tg(method, **kwargs):
     try:
-        requests.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendChatAction",
-            json={"chat_id": chat_id, "action": "typing"})
+        return requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{method}",
+            json=kwargs, timeout=10
+        )
     except:
         pass
 
@@ -230,44 +234,19 @@ def send(chat_id, text, reply_to=None):
     data = {"chat_id": chat_id, "text": text}
     if reply_to:
         data["reply_to_message_id"] = reply_to
-    try:
-        requests.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage", json=data)
-    except:
-        pass
+    tg("sendMessage", **data)
+
+def typing(chat_id):
+    tg("sendChatAction", chat_id=chat_id, action="typing")
 
 def react(chat_id, msg_id):
-    try:
-        requests.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/setMessageReaction",
-            json={"chat_id": chat_id, "message_id": msg_id,
-                  "reaction": [{"type": "emoji", "emoji": random.choice(["💀","😭","🔥","🤡","❤️"])}]})
-    except:
-        pass
+    emoji = random.choice(["💀", "😭", "🔥", "🤡", "❤️"])
+    tg("setMessageReaction", chat_id=chat_id, message_id=msg_id,
+       reaction=[{"type": "emoji", "emoji": emoji}])
 
-def comment_photo(display_name):
-    try:
-        mood = get_mood()
-        r = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
-            json={
-                "model": "llama-3.3-70b-versatile",
-                "messages": [
-                    {"role": "system", "content": f"{SYSTEM_PROMPT}\nнастроение: {mood}\nпрокомментируй фото коротко, 1 предложение, строчными"},
-                    {"role": "user", "content": f"{display_name} скинул фото"}
-                ],
-                "temperature": 1.1, "max_tokens": 50
-            }
-        )
-        return r.json()["choices"][0]["message"]["content"].strip()
-    except:
-        return random.choice(["лол", "окк", "хм", "ого"])
+# === GROQ ===
 
-def ask_groq(chat_id, messages):
-    mood = get_mood()
-    state = get_state(chat_id)
-    system = f"{SYSTEM_PROMPT}\nпримеры:\n{EXAMPLES}\nнастроение: {mood}\nзанята: {current_activity}\nэнергия: {state['energy']:.1f}\nне говори об этом напрямую"
-    if is_night():
-        system += "\nночь, ты сонная, пиши лениво и коротко"
+def groq(messages, system, max_tok=120):
     try:
         r = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
@@ -276,47 +255,58 @@ def ask_groq(chat_id, messages):
                 "model": "llama-3.3-70b-versatile",
                 "messages": [{"role": "system", "content": system}] + messages,
                 "temperature": 1.1,
-                "max_tokens": random.randint(15, 100),
+                "max_tokens": max_tok,
                 "presence_penalty": 0.9,
-                "frequency_penalty": 0.8
-            }
+                "frequency_penalty": 0.8,
+            },
+            timeout=15
         )
         reply = r.json()["choices"][0]["message"]["content"].strip()
-        if len(reply.split()) > 30:
-            reply = random.choice(["ну хз", "бля", "неее", "мне лень"])
-        return reply
+        return reply if len(reply.split()) <= 35 else random.choice(["ну хз", "бля", "мне лень"])
     except:
-        return random.choice(["бля", "не пон", "че", "отстаньте"])
+        return random.choice(["бля", "не шарю", "че", "отстаньте"])
 
-def should_reply(chat_id, mentioned, reply_to_bot):
-    if mentioned or reply_to_bot:
-        return True
-    state = get_state(chat_id)
-    return random.random() < (0.05 + state["energy"] * 0.15)
+def ask(chat_id, messages):
+    mood = get_mood()
+    system = (
+        f"{SYSTEM_PROMPT}\nпримеры:\n{EXAMPLES}\n"
+        f"настроение: {mood}\nзанята: {current_activity}\n"
+        f"не говори об этом напрямую"
+    )
+    if is_night():
+        system += "\nночь — пиши сонно и лениво"
+    return groq(messages, system, max_tok=random.randint(40, 150))
+
+def photo_comment(name):
+    mood = get_mood()
+    system = f"{SYSTEM_PROMPT}\nнастроение: {mood}\nпрокомментируй фото одним предложением, строчными"
+    return groq([{"role": "user", "content": f"{name} скинул фото"}], system, max_tok=50)
+
+# === MAIN ===
 
 print("лиза онлайн 🖤")
 
 while True:
     try:
         # отложенные мысли
-        for thought in delayed_queue[:]:
-            if time.time() >= thought["send_at"]:
-                send(thought["chat_id"], thought["text"])
-                delayed_queue.remove(thought)
+        now_ts = time.time()
+        for t in delayed_queue[:]:
+            if now_ts >= t["at"]:
+                send(t["chat_id"], t["text"])
+                delayed_queue.remove(t)
 
-        # сама пишет если тихо
-        for chat_id, last_t in list(last_message_time.items()):
-            if not is_night() and time.time() - last_t > random.randint(1800, 5400):
+        # пишет сама если тихо
+        for cid, lt in list(last_msg_time.items()):
+            if not is_night() and now_ts - lt > random.randint(1800, 5400):
                 if random.random() < 0.12:
-                    if random.random() < 0.3:
-                        send(chat_id, f"я {current_activity} кст")
-                    else:
-                        send(chat_id, random.choice(RANDOM_LIFE_MESSAGES))
-                    last_message_time[chat_id] = time.time()
+                    msg = f"я {current_activity} кст" if random.random() < 0.3 else random.choice(RANDOM_MSG)
+                    send(cid, msg)
+                    last_msg_time[cid] = now_ts
 
         updates = requests.get(
             f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates",
-            params={"timeout": 30, "offset": offset}
+            params={"timeout": 30, "offset": offset},
+            timeout=35
         ).json()
 
         for u in updates.get("result", []):
@@ -329,62 +319,66 @@ while True:
                 continue
 
             text = msg.get("text", "")
-            first_name = msg.get("from", {}).get("first_name", "")
-            username = msg.get("from", {}).get("username", "")
-            display_name = first_name if first_name else username
+            fname = msg.get("from", {}).get("first_name", "")
+            uname = msg.get("from", {}).get("username", "")
+            name = fname or uname
 
-            last_message_time[chat_id] = time.time()
-            update_state(chat_id)
+            last_msg_time[chat_id] = time.time()
 
             # фото
             if msg.get("photo") and random.random() < 0.35:
                 typing(chat_id)
                 time.sleep(random.uniform(1.5, 3.0))
-                send(chat_id, comment_photo(display_name), reply_to=msg_id)
+                send(chat_id, photo_comment(name), reply_to=msg_id)
                 continue
 
             if not text:
                 continue
 
-            update_mood_from_text(text)
-            remember(chat_id, display_name, text)
+            update_mood(text)
+            remember(chat_id, name, text)
 
-            text_lower = text.lower()
+            tl = text.lower()
 
-            reply_to_bot = False
-            if msg.get("reply_to_message"):
-                ru = msg["reply_to_message"].get("from", {}).get("username", "")
-                if ru.lower() == BOT_USERNAME.lower():
-                    reply_to_bot = True
-
-            mentioned = (
-                BOT_USERNAME.lower() in text_lower or
-                any(w in text_lower for w in TRIGGER_WORDS)
+            reply_to_bot = (
+                msg.get("reply_to_message", {})
+                   .get("from", {})
+                   .get("username", "")
+                   .lower() == BOT_USERNAME.lower()
             )
 
-            if not mentioned and not reply_to_bot and random.random() > 0.08:
-                # иногда просто реагирует
-                if random.random() < 0.05:
-                    react(chat_id, msg_id)
-                continue
+            mentioned = (
+                BOT_USERNAME.lower() in tl or
+                any(w in tl for w in TRIGGER_WORDS)
+            )
 
-            if not should_reply(chat_id, mentioned, reply_to_bot):
-                if random.random() < 0.25:
+            # не упомянули — иногда реагирует молча и идёт дальше
+            if not mentioned and not reply_to_bot:
+                if random.random() < 0.04:
+                    react(chat_id, msg_id)
+                if random.random() > 0.06:
+                    continue
+
+            # шанс ответить
+            base = 1.0 if (mentioned or reply_to_bot) else 0.2
+            if is_night() and not (mentioned or reply_to_bot):
+                base *= 0.3
+            if random.random() > base:
+                if random.random() < 0.3:
                     react(chat_id, msg_id)
                 continue
 
             if random.random() < 0.06:
                 react(chat_id, msg_id)
 
-            chat_histories.setdefault(chat_id, [])
-            mem_str = build_memory_str(chat_id)
-            recent = "".join(m["content"] + "\n" for m in chat_histories[chat_id][-6:] if m["role"] == "user")
+            hist = chat_histories.setdefault(chat_id, [])
+            recent = "".join(m["content"] + "\n" for m in hist[-6:] if m["role"] == "user")
 
-            chat_histories[chat_id].append({
+            hist.append({
                 "role": "user",
-                "content": f"чат:\n{recent}\nпамять:\n{mem_str}\n{display_name}: {text}"
+                "content": f"чат:\n{recent}\nпамять:\n{mem_str(chat_id)}\n{name}: {text}"
             })
-            chat_histories[chat_id] = chat_histories[chat_id][-30:]
+            chat_histories[chat_id] = hist[-30:]
 
             typing(chat_id)
             delay = random.uniform(0.8, 2.5)
@@ -393,36 +387,34 @@ while True:
             time.sleep(delay)
 
             # выбор ответа
-            quote = get_quote()
-            if quote and not (mentioned or reply_to_bot) and random.random() < 0.4:
-                reply = quote
+            q = get_quote()
+            if q and not (mentioned or reply_to_bot) and random.random() < 0.4:
+                reply = q
             elif is_night() and random.random() < 0.35:
-                reply = random.choice(SLEEPY_REPLIES)
+                reply = random.choice(SLEEPY)
             else:
-                reply = ask_groq(chat_id, chat_histories[chat_id])
-                reply = add_typos(reply)
+                reply = add_typos(ask(chat_id, chat_histories[chat_id]))
 
-            chat_histories[chat_id].append({"role": "assistant", "content": reply})
+            hist.append({"role": "assistant", "content": reply})
 
             # двойное сообщение
             if random.random() < 0.07:
-                first, second = random.choice(DOUBLE_MESSAGES)
-                send(chat_id, first)
+                f, s = random.choice(DOUBLE_MSG)
+                send(chat_id, f)
                 time.sleep(random.uniform(1.0, 2.0))
                 typing(chat_id)
                 time.sleep(1.0)
-                send(chat_id, second)
+                send(chat_id, s)
             else:
                 send(chat_id, reply, reply_to=msg_id if random.random() < 0.65 else None)
 
             # отложенная мысль
             if user_memory.get(chat_id) and random.random() < 0.05:
-                name = random.choice(list(user_memory[chat_id].keys()))
-                thought = random.choice(DELAYED_THOUGHTS).format(name=name)
+                n = random.choice(list(user_memory[chat_id].keys()))
                 delayed_queue.append({
                     "chat_id": chat_id,
-                    "text": thought,
-                    "send_at": time.time() + random.randint(300, 1200)
+                    "text": random.choice(DELAYED).format(name=n),
+                    "at": time.time() + random.randint(300, 1200)
                 })
 
     except Exception as e:
