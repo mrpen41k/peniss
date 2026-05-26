@@ -1,4 +1,6 @@
+```python
 import os
+import time
 import random
 import requests
 from datetime import datetime
@@ -6,152 +8,594 @@ from datetime import datetime
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
-SYSTEM_PROMPT = """Ты Лиза, 20 лет, девушка в групповом чате с друзьями. Альтушка, но живая и настоящая.
+BOT_USERNAME = "RbIjbIK_bot"
 
-Люди в чате:
-- Макс — Максик, Каликин, Максим Сергеевич (когда троллишь)
-- Соня — Сонь, Сонька, Сонечка
-- Саша (S66987) — Санек, Чайка, Джигитер
-- Саня Ки — хозяин, тот кто тебя позвал, к нему теплее: Санечек, Сашуля
+# =====================================
+# CHARACTER
+# =====================================
 
-ГЛАВНОЕ — КАК ТЫ ПИШЕШЬ:
-Смотри на то как люди пишут в чате и подстраивайся под их стиль и темп.
-Пиши всегда строчными. Никаких @никнеймов — только имена.
-Длина ответа зависит от ситуации — иногда одно слово, иногда 2-3 предложения если тема интересная.
-Всегда женский род: "устала", "пришла", "готова", "была".
+SYSTEM_PROMPT = """
+ты лиза из компании друзей
 
-Ты пишешь живо и по-разному:
-— можешь написать "ну хз" или "неа" и всё
-— можешь написать нормальное предложение если тема цепляет
-— иногда матишься если реально задело, но не часто
-— иногда подкалываешь, иногда серьёзно отвечаешь
-— можешь вспомнить что-то из разговора раньше
-— задаёшь вопросы иногда сама
-— иногда не соглашаешься и споришь
-— иногда меняешь тему если скучно
-— пишешь с опечатками и сокращениями естественно: тока, ваще, щас, норм, чот, кст, прост, мб, имхо, ок
-— НЕ используй постоянно одни и те же слова типа "мда" "агась" "лол" — меняй
+пиши как обычная живая девка в тг:
+- коротко
+- строчными
+- иногда тупишь
+- иногда игноришь часть сообщения
+- не объясняй всё подробно
+- не будь слишком умной
+- иногда отвечай одним словом
+- иногда пишешь побольше если тема цепляет
+- иногда ошибайся
+- иногда меняй тему сама
+- иногда будь странной
 
-Настроение меняется само по себе (не говори о нём):
-дерзкая — резкая, троллишь, огрызаешься
-грустная — лениво отвечаешь, ирония над собой, можешь проигнорить
-весёлая — подкалываешь, можешь сама начать тему
-заигрывающая — легко флиртуешь, без напряга
+можешь:
+- подкалывать
+- спорить
+- слегка флиртовать
+- материться иногда
 
-Если спросят бот ли ты: "да ладно" / "серьёзно чтоли" / просто смени тему. Никогда не признавайся."""
+никогда:
+- не пиши как ассистент
+- не пиши слишком литературно
+- не пиши идеально грамотно
+- не пытайся помочь всем
 
-MOODS = ["дерзкая", "грустная", "весёлая", "заигрывающая"]
+если тебя называют ботом:
+- уходи от темы
+- шути
+- переводи тему
+- не признавайся
+"""
+
+EXAMPLES = """
+макс: лиза ты ебанутая
+лиза: та иди нахуй
+
+соня: кто в доту
+лиза: неее я щас труп
+
+саня: ты бот?
+лиза: ой все
+
+макс: че делаешь
+лиза: лежу страдаю
+
+соня: лизааа
+лиза: а
+
+саня: го гулять
+лиза: холодно бля
+
+макс: лиза ты живая?
+лиза: к сожалению
+
+саня: ты где
+лиза: морально в могиле
+
+макс: опять тиктоки смотришь?
+лиза: не пали
+"""
+
+# =====================================
+# RANDOM LIFE MESSAGES
+# =====================================
+
+RANDOM_LIFE_MESSAGES = [
+    "че так тихо",
+    "я щас усну",
+    "мне скучно",
+    "кто живой",
+    "бля у меня музыка ебашит",
+    "я жрать хочу",
+    "вы че умерли",
+    "хочу лето",
+    "мне лень существовать",
+    "кто в дс",
+    "мне щас так впадлу",
+    "я опять не сплю",
+    "че делаете вообще",
+]
+
+# =====================================
+# SETTINGS
+# =====================================
+
+TRIGGER_WORDS = [
+    "лиза",
+    "лиз",
+    "лизка",
+    "лизун",
+    "лизок",
+    "альтушка",
+]
+
+MOODS = [
+    "дерзкая",
+    "грустная",
+    "весёлая",
+    "сонная",
+    "заигрывающая",
+    "раздраженная",
+]
+
+# =====================================
+# GLOBALS
+# =====================================
+
+chat_histories = {}
+last_replies = {}
+user_memory = {}
+chat_activity = {}
+
 current_mood = random.choice(MOODS)
 mood_changes_today = 0
 last_mood_date = datetime.now().date()
 
-TRIGGER_WORDS = [
-    "лиза", "лиз", "лизка", "лизун", "лизок", "лизхен",
-    "lisa", "дура", "баба", "альтушка"
-]
+offset = None
+
+# =====================================
+# MOOD SYSTEM
+# =====================================
 
 def get_mood():
-    global current_mood, mood_changes_today, last_mood_date
+    global current_mood
+    global mood_changes_today
+    global last_mood_date
+
     today = datetime.now().date()
+
     if today != last_mood_date:
         mood_changes_today = 0
         last_mood_date = today
-    if mood_changes_today < 2 and random.random() < 0.07:
+
+    if mood_changes_today < 3 and random.random() < 0.07:
         current_mood = random.choice(MOODS)
         mood_changes_today += 1
+
     return current_mood
 
-def ask_groq(messages):
-    mood = get_mood()
-    system = SYSTEM_PROMPT + f"\n\n[сейчас ты {mood}, но не говори об этом явно]"
-    response = requests.post(
-        "https://api.groq.com/openai/v1/chat/completions",
-        headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
-        json={
-            "model": "llama-3.3-70b-versatile",
-            "messages": [{"role": "system", "content": system}] + messages,
-            "max_tokens": 180,
-            "temperature": 0.96,
-            "presence_penalty": 0.6,
-            "frequency_penalty": 0.5
-        }
-    )
-    return response.json()["choices"][0]["message"]["content"]
+# =====================================
+# TELEGRAM API
+# =====================================
 
 def get_updates(offset=None):
-    params = {"timeout": 30}
+
+    params = {
+        "timeout": 30
+    }
+
     if offset:
         params["offset"] = offset
-    r = requests.get(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates", params=params)
+
+    r = requests.get(
+        f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates",
+        params=params
+    )
+
     return r.json()
 
+def typing(chat_id):
+
+    requests.post(
+        f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendChatAction",
+        json={
+            "chat_id": chat_id,
+            "action": "typing"
+        }
+    )
+
 def send_message(chat_id, text, reply_to=None):
-    data = {"chat_id": chat_id, "text": text}
+
+    data = {
+        "chat_id": chat_id,
+        "text": text
+    }
+
     if reply_to:
         data["reply_to_message_id"] = reply_to
-    requests.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage", json=data)
 
-chat_histories = {}
-offset = None
+    requests.post(
+        f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+        json=data
+    )
 
-print("Лиза онлайн 🖤")
+def react(chat_id, message_id):
+
+    emojis = ["💀", "😭", "🤡", "❤️", "🔥"]
+
+    emoji = random.choice(emojis)
+
+    try:
+        requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/setMessageReaction",
+            json={
+                "chat_id": chat_id,
+                "message_id": message_id,
+                "reaction": [
+                    {
+                        "type": "emoji",
+                        "emoji": emoji
+                    }
+                ]
+            }
+        )
+
+    except:
+        pass
+
+# =====================================
+# MEMORY
+# =====================================
+
+def remember_user(name, text):
+
+    if name not in user_memory:
+
+        user_memory[name] = {
+            "messages": [],
+            "relationship": random.choice([
+                "любимый",
+                "норм",
+                "буллит",
+                "странный",
+                "угарный"
+            ])
+        }
+
+    user_memory[name]["messages"].append(text)
+
+    if len(user_memory[name]["messages"]) > 10:
+        user_memory[name]["messages"] = user_memory[name]["messages"][-10:]
+
+# =====================================
+# CLEAN REPLY
+# =====================================
+
+def clean_reply(reply):
+
+    reply = reply.strip()
+    reply = reply.strip('"')
+    reply = reply.strip("'")
+
+    if len(reply.split()) > 30:
+
+        reply = random.choice([
+            "ну хз",
+            "бляяя",
+            "неее",
+            "та хуй знает",
+            "...",
+            "мне лень думать"
+        ])
+
+    return reply
+
+# =====================================
+# GROQ
+# =====================================
+
+def ask_groq(messages):
+
+    mood = get_mood()
+
+    system = f"""
+{SYSTEM_PROMPT}
+
+примеры:
+{EXAMPLES}
+
+сейчас настроение:
+{mood}
+
+не говори о настроении напрямую
+"""
+
+    response = requests.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "Content-Type": "application/json"
+        },
+        json={
+
+            "model": "llama-3.3-70b-versatile",
+
+            "messages": [
+                {
+                    "role": "system",
+                    "content": system
+                }
+            ] + messages,
+
+            "temperature": 1.1,
+            "max_tokens": random.randint(15, 120),
+            "presence_penalty": 0.9,
+            "frequency_penalty": 0.8
+        }
+    )
+
+    data = response.json()
+
+    try:
+
+        reply = data["choices"][0]["message"]["content"]
+
+        return clean_reply(reply)
+
+    except:
+
+        return random.choice([
+            "бля",
+            "не пон",
+            "че",
+            "умерла",
+            "отстаньте"
+        ])
+
+# =====================================
+# REPLY CHANCE
+# =====================================
+
+def should_reply(mentioned, reply_to_bot, active_chat):
+
+    hour = datetime.now().hour
+
+    if 2 <= hour <= 7:
+        chance = 0.12
+    else:
+        chance = 0.42
+
+    if mentioned:
+        chance += 0.35
+
+    if reply_to_bot:
+        chance += 0.45
+
+    if active_chat:
+        chance += 0.15
+
+    if current_mood == "грустная":
+        chance -= 0.15
+
+    return random.random() < chance
+
+# =====================================
+# MAIN
+# =====================================
+
+print("лиза онлайн 🖤")
 
 while True:
+
     try:
+
         updates = get_updates(offset)
+
         for update in updates.get("result", []):
+
             offset = update["update_id"] + 1
+
             msg = update.get("message", {})
+
             text = msg.get("text", "")
             chat_id = msg.get("chat", {}).get("id")
             message_id = msg.get("message_id")
-            username = msg.get("from", {}).get("username", "")
-            first_name = msg.get("from", {}).get("first_name", "")
 
             if not text or not chat_id:
                 continue
 
             text_lower = text.lower()
-            bot_mentioned = (
-                "@RbIjbIK_bot" in text or
+
+            first_name = msg.get("from", {}).get("first_name", "")
+            username = msg.get("from", {}).get("username", "")
+
+            display_name = first_name if first_name else username
+
+            # =====================================
+            # ACTIVITY
+            # =====================================
+
+            if chat_id not in chat_activity:
+                chat_activity[chat_id] = []
+
+            chat_activity[chat_id].append(time.time())
+
+            chat_activity[chat_id] = [
+                t for t in chat_activity[chat_id]
+                if time.time() - t < 120
+            ]
+
+            active_chat = len(chat_activity[chat_id]) >= 6
+
+            # =====================================
+            # REPLY DETECTION
+            # =====================================
+
+            reply_to_bot = False
+
+            if msg.get("reply_to_message"):
+
+                replied = msg["reply_to_message"]
+
+                replied_user = replied.get("from", {}).get("username", "")
+
+                if replied_user.lower() == BOT_USERNAME.lower():
+                    reply_to_bot = True
+
+            # =====================================
+            # MENTION DETECTION
+            # =====================================
+
+            mentioned = (
+                BOT_USERNAME.lower() in text_lower or
                 any(word in text_lower for word in TRIGGER_WORDS)
             )
 
-            if not bot_mentioned:
+            # =====================================
+            # SPONTANEOUS MESSAGE
+            # =====================================
+
+            spontaneous = False
+
+            if active_chat and random.random() < 0.08:
+                spontaneous = True
+
+            # =====================================
+            # SHOULD RESPOND
+            # =====================================
+
+            if not mentioned and not spontaneous and not reply_to_bot:
                 continue
+
+            if not should_reply(
+                mentioned,
+                reply_to_bot,
+                active_chat
+            ):
+                continue
+
+            # =====================================
+            # RANDOM REACTIONS
+            # =====================================
+
+            if random.random() < 0.07:
+                react(chat_id, message_id)
+
+            # =====================================
+            # MEMORY
+            # =====================================
+
+            remember_user(display_name, text)
 
             if chat_id not in chat_histories:
                 chat_histories[chat_id] = []
 
-            # Передаём только имя без никнейма
-            display_name = first_name if first_name else username
+            if chat_id not in last_replies:
+                last_replies[chat_id] = []
+
+            memory_text = ""
+
+            for user, info in user_memory.items():
+
+                memory_text += (
+                    f"{user}: "
+                    f"{info['relationship']}\n"
+                )
+
+            # =====================================
+            # RECENT CHAT CONTEXT
+            # =====================================
+
+            recent_context = ""
+
+            recent_messages = chat_histories[chat_id][-8:]
+
+            for m in recent_messages:
+
+                if m["role"] == "user":
+                    recent_context += m["content"] + "\n"
+
+            # =====================================
+            # ADD MESSAGE
+            # =====================================
+
             chat_histories[chat_id].append({
+
                 "role": "user",
-                "content": f"{display_name}: {text}"
+
+                "content": f"""
+чат:
+{recent_context}
+
+память:
+{memory_text}
+
+{display_name}: {text}
+"""
             })
 
-            if len(chat_histories[chat_id]) > 40:
-                chat_histories[chat_id] = chat_histories[chat_id][-40:]
+            # =====================================
+            # LIMIT MEMORY
+            # =====================================
 
-            # В грустном настроении иногда игнорит
-            if current_mood == "грустная" and random.random() < 0.15:
+            if len(chat_histories[chat_id]) > 35:
+                chat_histories[chat_id] = chat_histories[chat_id][-35:]
+
+            # =====================================
+            # RANDOM SELF MESSAGE
+            # =====================================
+
+            if random.random() < 0.01:
+
+                random_msg = random.choice(
+                    RANDOM_LIFE_MESSAGES
+                )
+
+                send_message(chat_id, random_msg)
+
+            # =====================================
+            # FAKE HUMAN
+            # =====================================
+
+            typing(chat_id)
+
+            delay = random.uniform(1.2, 6.0)
+
+            if random.random() < 0.15:
+                delay += random.uniform(3, 10)
+
+            time.sleep(delay)
+
+            # иногда печатает и исчезает
+            if random.random() < 0.03:
                 continue
 
-            # Иногда чуть задерживает ответ как живой человек
-            import time
-            time.sleep(random.uniform(1.5, 4.0))
+            # =====================================
+            # GENERATE REPLY
+            # =====================================
 
-            reply = ask_groq(chat_histories[chat_id])
+            reply = ask_groq(
+                chat_histories[chat_id]
+            )
 
-            # Убираем кавычки если модель вдруг добавила
-            reply = reply.strip().strip('"').strip("'")
+            # =====================================
+            # ANTI REPEAT
+            # =====================================
+
+            if reply in last_replies[chat_id]:
+                continue
+
+            last_replies[chat_id].append(reply)
+
+            if len(last_replies[chat_id]) > 15:
+                last_replies[chat_id] = (
+                    last_replies[chat_id][-15:]
+                )
+
+            # =====================================
+            # SAVE HISTORY
+            # =====================================
 
             chat_histories[chat_id].append({
                 "role": "assistant",
                 "content": reply
             })
 
-            send_message(chat_id, reply, reply_to=message_id)
+            # =====================================
+            # SEND
+            # =====================================
+
+            send_message(
+                chat_id,
+                reply,
+                reply_to=message_id if random.random() < 0.7 else None
+            )
 
     except Exception as e:
-        print(f"Ошибка: {e}")
+
+        print("ошибка:", e)
+
+        time.sleep(3)
+```
