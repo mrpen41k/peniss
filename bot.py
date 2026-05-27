@@ -296,9 +296,9 @@ while True:
             if random.random() < 0.05:
                 react(chat_id, msg_id)
 
+            # история — работаем с одной ссылкой, обрезаем строго в конце
             hist = chat_histories.setdefault(chat_id, [])
             hist.append({"role": "user", "content": f"{name}: {text}"})
-            chat_histories[chat_id] = hist[-6:]
 
             if is_night() and random.random() < 0.3:
                 reply = random.choice(SLEEPY)
@@ -309,10 +309,12 @@ while True:
                     reply = q
                     typing(chat_id)
                     time.sleep(random.uniform(0.5, 1.2))
+                    reply = add_typos(reply)
+                    reply = maybe_mat(reply)
                 else:
                     typing(chat_id)
                     time.sleep(random.uniform(0.8, 2.2) + (random.uniform(2, 4) if is_night() else 0))
-                    reply = ask(chat_id, chat_histories[chat_id])
+                    reply = ask(chat_id, hist[-6:])
                     if reply is None:
                         continue
                     reply = add_typos(reply)
