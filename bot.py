@@ -422,15 +422,21 @@ while True:
                 reply = maybe_add_mat(reply)
 
             hist.append({"role": "assistant", "content": reply})
+            chat_histories[chat_id] = hist[-4:]
 
-            if random.random() < 0.07:
-                f, s = random.choice(DOUBLE_MSG)
-                send(chat_id, f)
-                time.sleep(random.uniform(1.0, 2.0))
-                typing(chat_id)
-                time.sleep(1.0)
-                send(chat_id, s)
-            else:
+            was_split = False
+
+            if len(reply) > 35 and ',' in reply and random.random() < 0.18:
+                parts = reply.split(',', 1)
+                if len(parts[0]) > 8 and len(parts[1]) > 8:
+                    send(chat_id, parts[0].strip())
+                    time.sleep(random.uniform(1.2, 2.5))
+                    typing(chat_id)
+                    time.sleep(0.8)
+                    send(chat_id, parts[1].strip())
+                    was_split = True
+
+            if not was_split:
                 send(chat_id, reply, reply_to=msg_id if random.random() < 0.65 else None)
 
             if user_memory.get(chat_id) and random.random() < 0.05:
