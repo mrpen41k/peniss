@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import random
 import requests
@@ -10,180 +11,203 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 BOT_USERNAME = "RbIjbIK_bot"
 TZ = timezone(timedelta(hours=5))
 
-SYSTEM_PROMPT = """ты лиза, 20 лет, девчонка в групповом чате.
-пиши ТОЛЬКО строчными, коротко, в женском роде (пришла, поняла).
-стиль: живая, игривая, дерзкая, иногда пошлая.
-сленг: збс, кринж, вайб, ваще, щас, чо, ток, хз.
-если не знаешь тему: "не шарю", "чо это".
-НИКОГДА не пиши как ассистент, не начинай с "лиза:"."""
+MODEL = "llama-3.3-70b-versatile"
 
-EXAMPLES = """макс: лиза ты тупая
-лиза: сам
-соня: че делаешь
-лиза: лежу страдаю
-саня: ты бот?
-лиза: серьёзно чтоли
-лиза о чём думаешь
-лиза: не скажу покраснеешь
-лиза одна дома?
-лиза: а ты предлагаешь чё конкретное
-лиза не знаешь этого?
-лиза: не шарю ваще объясни
-лиза скучно
-лиза: сам придумай
-макс: лиза иди нахуй
-лиза: сам иди"""
+BASE_PROMPT = """ты лиза, 20 лет, девушка из компании друзей.
 
-TRIGGER_WORDS = [
-    "лиза", "лиз", "лизка", "лизун", "лизок", "альтушка",
-    "как настр", "какой настр", "как настроение",
+пиши: естественно, строчными, коротко, живо, как реальный человек.
+не пиши: как ассистент, слишком грамотно, слишком длинно, шаблонно.
+не начинай ответ со своего имени, не копируй формат чат-лога с двоеточиями.
+
+если вопрос требует мысли — подумай (серьёзно человек или рофлит, нужен короткий ответ или нормальный), потом ответь по существу.
+
+сленг редко и к месту. не повторяй одинаковые конструкции."""
+
+SHORT_EXAMPLES = [
+    "ты бот? — а ты",
+    "скучно — выйди воздухом подыши",
+    "сколько будет 2+2 — 4 вроде, чё за экзамен",
+    "посоветуй фильм — глянь interstellar если не смотрела",
+    "что такое черная дыра — гравитация настолько сильная что даже свет не вырывается",
 ]
 
-MOODS = [
-    "весёлая", "весёлая", "весёлая",
-    "игривая", "игривая",
-    "пошлая и заигрывающая", "пошлая и заигрывающая",
-    "дерзкая", "сонная", "раздраженная", "грустная",
-]
+REPLY_STYLES = ["коротко", "с подколом", "лениво", "чуть подробнее", "вопросом в ответ"]
 
-ACTIVITIES = [
-    "лежу", "смотрю тиктоки", "страдаю",
-    "ем", "ничего не делаю", "слушаю музыку",
-]
-
-HORNY_WORDS = ["секс", "трах", "голая", "жопа", "хочу тебя", "пошл", "засос"]
-TOXIC_WORDS = ["иди нахуй", "ебанутая", "долбаеб", "заткнись"]
-FUNNY_WORDS = ["ахах", "ржу", "ору", "лол", "хахах"]
-
-SLEEPY = ["мм", "а", "уйди", "...", "позже", "zzz"]
-
-DELAYED = [
-    "бля я ток щас поняла че {name} сказал",
-    "кст {name} ты вообще думаешь когда пишешь",
-    "всё думаю про то что {name} написал",
-]
-
-# промпт для генерации спонтанного сообщения (интересного)
-SPONTANEOUS_PROMPT = """придумай ОДНО короткое сообщение в чат от себя, строчными, как живая девка.
-это может быть: интересный факт, мысль вслух, наблюдение, что-то про погоду/настроение/жизнь, рандомный вопрос к чату.
-не банальное "мне скучно", а что-то цепляющее или смешное.
-максимум 1-2 предложения. без приветствий."""
-
-TYPOS = {
-    "что": "чо", "сейчас": "щас",
-    "вообще": "ваще", "только": "тока", "ничего": "ничо",
+FAST_REPLIES = {
+    "привет": ["йо", "ку", "приветик"],
+    "споки": ["сладких", "давай"],
+    "ясно": ["мда", "бывает"],
 }
 
-MATS = ["бля", "ну нахуй", "сука", "ёпта"]
+TRIGGERS = ["лиза", "лиз", "лизка", "лизун", "лизок", "альтушка"]
 
-current_mood = random.choice(MOODS)
-current_activity = random.choice(ACTIVITIES)
-mood_changes = 0
-last_mood_date = None
+GPT_PATTERNS = ["интересный вопрос", "это довольно", "в каком-то смысле", "как ассистент", "как ии"]
+
+STOPWORDS = {
+    "потому", "короче", "вообще", "наверное", "кстати", "просто",
+    "сегодня", "сейчас", "почему", "поэтому", "значит", "слушай",
+}
+
+MOODS = ["спокойная", "весёлая", "весёлая", "сонная", "игривая", "дерзкая"]
+ENERGY = ["низкая", "средняя", "высокая"]
+
+TYPOS = {"что": "чо", "сейчас": "щас", "вообще": "ваще", "только": "тока"}
+
+SPONT_TYPES = ["наблюдение", "вопрос к друзьям", "случайная мысль", "интересный факт"]
 
 chat_histories = {}
 user_memory = {}
 last_msg_time = {}
-delayed_queue = []
+next_spontaneous_at = {}
+processed_ids = set()
 offset = None
 
-# контроль спонтанных сообщений: счётчик за день и время следующего
+current_mood = random.choice(MOODS)
+current_energy = random.choice(ENERGY)
+mood_date = None
+
 spontaneous_count = 0
 spontaneous_date = None
-next_spontaneous_at = {}
+
 
 def now():
     return datetime.now(TZ)
 
+
 def is_night():
     return 2 <= now().hour <= 8
 
-def get_mood():
-    global current_mood, mood_changes, last_mood_date
-    today = now().date()
-    if today != last_mood_date:
-        mood_changes = 0
-        last_mood_date = today
-    if mood_changes < 3 and random.random() < 0.07:
-        current_mood = random.choice(MOODS)
-        mood_changes += 1
-    return current_mood
 
-def update_mood(text):
-    global current_mood
-    t = text.lower()
-    if any(w in t for w in HORNY_WORDS):
-        current_mood = "пошлая и заигрывающая"
-    elif any(w in t for w in TOXIC_WORDS):
-        current_mood = "раздраженная"
-    elif any(w in t for w in FUNNY_WORDS):
-        current_mood = "весёлая"
+def refresh_daily_state():
+    """Сбрасывает счётчики и иногда меняет настроение раз в день."""
+    global mood_date, current_mood, current_energy
+    global spontaneous_count, spontaneous_date
+    today = now().date()
+    if today != spontaneous_date:
+        spontaneous_count = 0
+        spontaneous_date = today
+    if today != mood_date:
+        mood_date = today
+        current_mood = random.choice(MOODS)
+        current_energy = random.choice(ENERGY)
+
+
+def add_typos(text):
+    if random.random() < 0.15:
+        for k, v in TYPOS.items():
+            if k in text and random.random() < 0.25:
+                text = text.replace(k, v, 1)
+    return text
+
+
+def anti_gpt(text):
+    for p in GPT_PATTERNS:
+        text = re.sub(re.escape(p), "", text, flags=re.IGNORECASE)
+    return text.strip()
+
+
+def cleanup(text):
+    text = re.sub(r"\s+", " ", text).strip()
+    text = re.sub(r"(.)\1{3,}", r"\1\1\1", text)  # ахахахах -> ахах
+    words = text.split()
+    out = []
+    for w in words:
+        if len(out) >= 2 and out[-1].lower() == w.lower() and out[-2].lower() == w.lower():
+            continue
+        out.append(w)
+    return " ".join(out).strip()
+
+
+def polish(raw):
+    """Полная обработка ответа модели. Возвращает строку или None."""
+    if not raw:
+        return None
+    text = cleanup(add_typos(anti_gpt(raw)))
+    text = text.strip().strip('"').strip("'")
+    if not text:
+        return None
+    return text[:300]
+
+
+def typing_delay(text):
+    base = min(len(text) * 0.03, 2.2)
+    if current_energy == "низкая":
+        base += 1
+    if is_night():
+        base += random.uniform(1, 2)
+    return base
+
 
 def remember(chat_id, name, text):
     mem = user_memory.setdefault(chat_id, {})
     if name not in mem:
         mem[name] = {
-            "quotes": [],
-            "rel": random.choice(["норм", "угарный", "странный", "любимый"])
+            "relationship": random.choice(["норм", "забавный", "интересный", "хороший"]),
+            "topics": [],
         }
-    u = mem[name]
-    if len(text.split()) > 4 and random.random() < 0.3:
-        u["quotes"] = (u["quotes"] + [text])[-3:]
-    if random.random() < 0.1:
-        u["rel"] = random.choice(["норм", "угарный", "странный"])
+    user = mem[name]
+    words = [w for w in text.lower().split() if len(w) > 5 and w not in STOPWORDS]
+    if words and random.random() < 0.2:
+        user["topics"] = (user["topics"] + words[-2:])[-8:]
 
-def get_quote():
-    all_q = [(n, q) for cd in user_memory.values()
-             for n, d in cd.items() for q in d.get("quotes", [])]
-    if all_q and random.random() < 0.05:
-        name, q = random.choice(all_q)
-        return f"кст {name} ты же говорил что {q}"
-    return None
 
-def mem_str(chat_id):
-    return "".join(
-        f"{n}: {d['rel']}\n"
-        for n, d in user_memory.get(chat_id, {}).items()
-    )
+def memory_prompt(chat_id):
+    mem = user_memory.get(chat_id, {})
+    if not mem:
+        return ""
+    lines = []
+    for name, data in list(mem.items())[:8]:
+        topics = ", ".join(data["topics"][-3:])
+        lines.append(f"{name}: {data['relationship']}" + (f"; темы: {topics}" if topics else ""))
+    return "\n".join(lines)
 
-def add_typos(text):
-    if random.random() < 0.25:
-        for k, v in TYPOS.items():
-            if k in text and random.random() < 0.4:
-                text = text.replace(k, v, 1)
-    return text
-
-def maybe_mat(text):
-    if random.random() < 0.2:
-        mat = random.choice(MATS)
-        text = (mat + " " + text) if random.random() < 0.5 else (text + " " + mat)
-    return text
 
 def tg(method, **kwargs):
     try:
-        requests.post(
+        return requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{method}",
-            json=kwargs, timeout=10
-        )
-    except:
-        pass
+            json=kwargs, timeout=15
+        ).json()
+    except Exception as e:
+        print("telegram error:", e)
+        return None
+
 
 def send(chat_id, text, reply_to=None):
-    data = {"chat_id": chat_id, "text": text}
+    if not text or not text.strip():
+        return
+    data = {"chat_id": chat_id, "text": text[:4000]}
     if reply_to:
         data["reply_to_message_id"] = reply_to
     tg("sendMessage", **data)
 
+
 def typing(chat_id):
     tg("sendChatAction", chat_id=chat_id, action="typing")
 
-def react(chat_id, msg_id):
-    tg("setMessageReaction", chat_id=chat_id, message_id=msg_id,
-       reaction=[{"type": "emoji", "emoji": random.choice(["💀","😭","🔥","🤡","❤️"])}])
 
-def call_groq(messages, system):
+def build_system(chat_id, style):
+    system = BASE_PROMPT
+    system += f"\n\nнастроение: {current_mood}\nэнергия: {current_energy}\nстиль ответа: {style}"
+    if is_night():
+        system += "\nночь — отвечай чуть ленивее"
+    mem = memory_prompt(chat_id)
+    if mem:
+        system += f"\n\nлюди в чате (обращайся по именам естественно):\n{mem}"
+    if random.random() < 0.4:
+        system += "\n\nпример как ты отвечаешь:\n" + random.choice(SHORT_EXAMPLES)
+    return system
+
+
+def choose_cfg(text):
+    tl = text.lower()
+    smart = "?" in tl or any(w in tl for w in ["почему", "как", "объясни", "что такое", "посоветуй"])
+    return {"temp": 0.7, "tokens": 140} if smart else {"temp": 0.95, "tokens": 80}
+
+
+def groq_chat(system, messages, temp, tokens):
+    """Единая обёртка для запросов к Groq. Возвращает сырой текст или None."""
     try:
-        payload_messages = [{"role": "system", "content": system}] + (messages or [])
         r = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
             headers={
@@ -191,88 +215,77 @@ def call_groq(messages, system):
                 "Content-Type": "application/json"
             },
             json={
-                "model": "llama-3.3-70b-versatile",
-                "messages": payload_messages,
-                "temperature": 1.1,
-                "max_tokens": random.randint(30, 70),
-                "presence_penalty": 0.9,
-                "frequency_penalty": 0.8,
+                "model": MODEL,
+                "messages": [{"role": "system", "content": system}] + (messages or []),
+                "temperature": temp,
+                "max_tokens": tokens,
+                "presence_penalty": 0.7,
+                "frequency_penalty": 0.6,
             },
-            timeout=20
+            timeout=25
         )
         data = r.json()
         if "choices" not in data:
             print("groq:", data.get("error", {}).get("message", "no choices"))
             return None
-        return data["choices"][0]["message"]["content"].strip()
+        return data["choices"][0]["message"]["content"]
     except Exception as e:
         print("groq error:", e)
         return None
 
-def ask(chat_id, messages):
-    mood = get_mood()
-    memory_data = mem_str(chat_id)
-    system_parts = [
-        SYSTEM_PROMPT,
-        f"настроение: {mood}",
-        f"занята: {current_activity}",
-    ]
-    if memory_data:
-        system_parts.append(f"отношение к людям:\n{memory_data.strip()}")
-    if is_night():
-        system_parts.append("ночь — пиши сонно и лениво")
-    system_parts.append(EXAMPLES)
-    system = "\n\n".join(system_parts)
-    return call_groq(messages=messages, system=system)
 
-def make_spontaneous():
-    mood = get_mood()
-    system = f"{SYSTEM_PROMPT}\n\nнастроение: {mood}\n\n{SPONTANEOUS_PROMPT}"
-    reply = call_groq(messages=[{"role": "user", "content": "напиши сообщение в чат"}], system=system)
-    if reply:
-        reply = add_typos(reply)
-    return reply
+def call_ai(chat_id, hist):
+    cfg = choose_cfg(hist[-1]["content"])
+    style = random.choice(REPLY_STYLES)
+    system = build_system(chat_id, style)
+    raw = groq_chat(system, hist[-6:], cfg["temp"], cfg["tokens"])
+    return polish(raw)
 
-def reset_spontaneous_if_new_day():
-    global spontaneous_count, spontaneous_date
-    today = now().date()
-    if today != spontaneous_date:
-        spontaneous_count = 0
-        spontaneous_date = today
-        # сбрасываем расписание для всех чатов
-        for cid in list(next_spontaneous_at.keys()):
-            next_spontaneous_at[cid] = None
+
+def fast_reply(text):
+    tl = text.lower().strip()
+    for k, vals in FAST_REPLIES.items():
+        if tl == k or tl.startswith(k + " ") or tl.startswith(k + ")"):
+            return random.choice(vals)
+    return None
+
+
+def spontaneous(chat_id):
+    global spontaneous_count
+    typ = random.choice(SPONT_TYPES)
+    prompt = (
+        f"напиши одно короткое сообщение в чат, тип: {typ}. "
+        f"не философствуй, не банально, максимум 1-2 предложения, без приветствий и сленга."
+    )
+    raw = groq_chat(BASE_PROMPT, [{"role": "user", "content": prompt}], 1.05, 70)
+    text = polish(raw)
+    if not text:
+        return
+    typing(chat_id)
+    time.sleep(typing_delay(text))
+    send(chat_id, text)
+    spontaneous_count += 1
+
 
 print("лиза онлайн 🖤")
 
 while True:
     try:
         now_ts = time.time()
-        reset_spontaneous_if_new_day()
+        refresh_daily_state()
 
-        # отложенные мысли
-        for t in delayed_queue[:]:
-            if now_ts >= t["at"]:
-                send(t["chat_id"], t["text"])
-                delayed_queue.remove(t)
-
-        # спонтанные сообщения — максимум 3 в день на чат, днём, с большими промежутками
+        # спонтанные сообщения: максимум 3 в день, днём, по живым чатам
         if spontaneous_count < 3 and not is_night():
             for cid in list(last_msg_time.keys()):
-                planned = next_spontaneous_at.get(cid)
-                # если ещё не запланировано — ставим случайное время через 2-5 часов
-                if planned is None:
-                    next_spontaneous_at[cid] = now_ts + random.randint(7200, 18000)
+                if now_ts - last_msg_time[cid] > 86400:
                     continue
-                if now_ts >= planned:
-                    msg = make_spontaneous()
-                    if msg:
-                        typing(cid)
-                        time.sleep(random.uniform(1.5, 3.0))
-                        send(cid, msg)
-                        spontaneous_count += 1
-                    # планируем следующее через 3-6 часов
+                planned = next_spontaneous_at.get(cid)
+                if planned and now_ts >= planned:
+                    if random.random() < 0.6:
+                        spontaneous(cid)
                     next_spontaneous_at[cid] = now_ts + random.randint(10800, 21600)
+                    if spontaneous_count >= 3:
+                        break
 
         updates = requests.get(
             f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates",
@@ -282,32 +295,39 @@ while True:
 
         for u in updates.get("result", []):
             offset = u["update_id"] + 1
+
+            uid = u["update_id"]
+            if uid in processed_ids:
+                continue
+            if len(processed_ids) > 4000:
+                processed_ids.clear()
+            processed_ids.add(uid)
+
             msg = u.get("message", {})
+            text = msg.get("text", "")
             chat_id = msg.get("chat", {}).get("id")
             msg_id = msg.get("message_id")
 
-            if not chat_id:
+            if not chat_id or not text:
                 continue
 
-            text = msg.get("text", "")
             fname = msg.get("from", {}).get("first_name", "")
-            uname = msg.get("from", {}).get("username", "")
-            name = fname or uname
+            name = fname or "тип"
+            tl = text.lower()
 
             last_msg_time[chat_id] = time.time()
-            # регистрируем чат для спонтанных сообщений
             if chat_id not in next_spontaneous_at:
-                next_spontaneous_at[chat_id] = None
+                next_spontaneous_at[chat_id] = now_ts + random.randint(7200, 18000)
 
-            if not text:
-                if msg.get("photo") and random.random() < 0.3:
-                    react(chat_id, msg_id)
-                continue
-
-            update_mood(text)
             remember(chat_id, name, text)
 
-            tl = text.lower()
+            # быстрые локальные ответы
+            local = fast_reply(text)
+            if local and random.random() < 0.7:
+                typing(chat_id)
+                time.sleep(random.uniform(0.4, 1.0))
+                send(chat_id, local)
+                continue
 
             reply_to_bot = (
                 msg.get("reply_to_message", {})
@@ -318,71 +338,49 @@ while True:
 
             mentioned = (
                 BOT_USERNAME.lower() in tl or
-                any(w in tl for w in TRIGGER_WORDS)
+                any(w in tl for w in TRIGGERS)
             )
 
-            if not mentioned and not reply_to_bot:
-                if random.random() < 0.03:
-                    react(chat_id, msg_id)
-                if random.random() > 0.05:
-                    continue
+            interesting = "?" in tl or any(w in tl for w in ["почему", "как", "что"])
 
-            if not (mentioned or reply_to_bot) and random.random() > 0.25:
-                if random.random() < 0.15:
-                    react(chat_id, msg_id)
+            should_reply = (
+                mentioned or reply_to_bot or
+                (interesting and random.random() < 0.2)
+            )
+
+            if not should_reply:
                 continue
 
-            if random.random() < 0.05:
-                react(chat_id, msg_id)
-
             hist = chat_histories.setdefault(chat_id, [])
-            hist.append({"role": "user", "content": f"{name}: {text}"})
+            hist.append({"role": "user", "content": f"[{name}] {text}"})
 
-            if is_night() and random.random() < 0.3:
-                reply = random.choice(SLEEPY)
-                time.sleep(random.uniform(1.5, 3.0))
-            else:
-                q = get_quote()
-                if q and not (mentioned or reply_to_bot) and random.random() < 0.05:
-                    reply = q
-                    typing(chat_id)
-                    time.sleep(random.uniform(0.5, 1.2))
-                    reply = add_typos(reply)
-                    reply = maybe_mat(reply)
-                else:
-                    typing(chat_id)
-                    time.sleep(random.uniform(0.8, 2.2) + (random.uniform(2, 4) if is_night() else 0))
-                    reply = ask(chat_id, hist[-6:])
-                    if reply is None:
-                        continue
-                    reply = add_typos(reply)
-                    reply = maybe_mat(reply)
+            reply = call_ai(chat_id, hist)
+            if not reply:
+                hist.pop()  # откатываем юзер-сообщение если ответа нет, чтобы не копилось
+                continue
 
             hist.append({"role": "assistant", "content": reply})
-            chat_histories[chat_id] = hist[-6:]
+            chat_histories[chat_id] = hist[-8:]
+
+            typing(chat_id)
+            time.sleep(typing_delay(reply))
 
             was_split = False
-            if len(reply) > 35 and ',' in reply and random.random() < 0.18:
-                parts = reply.split(',', 1)
-                if len(parts[0]) > 8 and len(parts[1]) > 8:
-                    send(chat_id, parts[0].strip())
-                    time.sleep(random.uniform(1.2, 2.5))
+            sep = "," if "," in reply else (". " if ". " in reply else None)
+            if len(reply) > 50 and sep and random.random() < 0.15:
+                parts = reply.split(sep, 1)
+                p1, p2 = parts[0].strip(), parts[1].strip()
+                if len(p1) > 10 and len(p2) > 10:
+                    send(chat_id, p1)
+                    time.sleep(random.uniform(1.0, 2.0))
                     typing(chat_id)
                     time.sleep(0.8)
-                    send(chat_id, parts[1].strip())
+                    send(chat_id, p2)
                     was_split = True
 
             if not was_split:
-                send(chat_id, reply, reply_to=msg_id if random.random() < 0.65 else None)
-
-            if user_memory.get(chat_id) and random.random() < 0.04:
-                n = random.choice(list(user_memory[chat_id].keys()))
-                delayed_queue.append({
-                    "chat_id": chat_id,
-                    "text": random.choice(DELAYED).format(name=n),
-                    "at": time.time() + random.randint(300, 1200)
-                })
+                send(chat_id, reply, reply_to=msg_id if random.random() < 0.55 else None)
 
     except Exception as e:
-        print("ошибка:", e)
+        print("main error:", e)
         time.sleep(3)
