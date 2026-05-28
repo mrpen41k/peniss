@@ -63,12 +63,11 @@ DELAYED = [
     "всё думаю про то что {name} написал",
 ]
 
-RANDOM_MSG = [
-    "че так тихо", "мне скучно", "кто живой",
-    "я жрать хочу", "вы умерли чтоли",
-    "хочу лето", "мне лень существовать",
-    "вайб странный сегодня", "кто в дс",
-]
+# промпт для генерации спонтанного сообщения (интересного)
+SPONTANEOUS_PROMPT = """придумай ОДНО короткое сообщение в чат от себя, строчными, как живая девка.
+это может быть: интересный факт, мысль вслух, наблюдение, что-то про погоду/настроение/жизнь, рандомный вопрос к чату.
+не банальное "мне скучно", а что-то цепляющее или смешное.
+максимум 1-2 предложения. без приветствий."""
 
 TYPOS = {
     "что": "чо", "сейчас": "щас",
@@ -87,6 +86,11 @@ user_memory = {}
 last_msg_time = {}
 delayed_queue = []
 offset = None
+
+# контроль спонтанных сообщений: счётчик за день и время следующего
+spontaneous_count = 0
+spontaneous_date = None
+next_spontaneous_at = {}
 
 def now():
     return datetime.now(TZ)
@@ -221,22 +225,54 @@ def ask(chat_id, messages):
     system = "\n\n".join(system_parts)
     return call_groq(messages=messages, system=system)
 
+def make_spontaneous():
+    mood = get_mood()
+    system = f"{SYSTEM_PROMPT}\n\nнастроение: {mood}\n\n{SPONTANEOUS_PROMPT}"
+    reply = call_groq(messages=[{"role": "user", "content": "напиши сообщение в чат"}], system=system)
+    if reply:
+        reply = add_typos(reply)
+    return reply
+
+def reset_spontaneous_if_new_day():
+    global spontaneous_count, spontaneous_date
+    today = now().date()
+    if today != spontaneous_date:
+        spontaneous_count = 0
+        spontaneous_date = today
+        # сбрасываем расписание для всех чатов
+        for cid in list(next_spontaneous_at.keys()):
+            next_spontaneous_at[cid] = None
+
 print("лиза онлайн 🖤")
 
 while True:
     try:
         now_ts = time.time()
+        reset_spontaneous_if_new_day()
 
+        # отложенные мысли
         for t in delayed_queue[:]:
             if now_ts >= t["at"]:
                 send(t["chat_id"], t["text"])
                 delayed_queue.remove(t)
 
-        for cid, lt in list(last_msg_time.items()):
-            if not is_night() and now_ts - lt > random.randint(2400, 6000):
-                if random.random() < 0.1:
-                    send(cid, random.choice(RANDOM_MSG))
-                    last_msg_time[cid] = now_ts
+        # спонтанные сообщения — максимум 3 в день на чат, днём, с большими промежутками
+        if spontaneous_count < 3 and not is_night():
+            for cid in list(last_msg_time.keys()):
+                planned = next_spontaneous_at.get(cid)
+                # если ещё не запланировано — ставим случайное время через 2-5 часов
+                if planned is None:
+                    next_spontaneous_at[cid] = now_ts + random.randint(7200, 18000)
+                    continue
+                if now_ts >= planned:
+                    msg = make_spontaneous()
+                    if msg:
+                        typing(cid)
+                        time.sleep(random.uniform(1.5, 3.0))
+                        send(cid, msg)
+                        spontaneous_count += 1
+                    # планируем следующее через 3-6 часов
+                    next_spontaneous_at[cid] = now_ts + random.randint(10800, 21600)
 
         updates = requests.get(
             f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates",
@@ -259,6 +295,9 @@ while True:
             name = fname or uname
 
             last_msg_time[chat_id] = time.time()
+            # регистрируем чат для спонтанных сообщений
+            if chat_id not in next_spontaneous_at:
+                next_spontaneous_at[chat_id] = None
 
             if not text:
                 if msg.get("photo") and random.random() < 0.3:
@@ -296,7 +335,6 @@ while True:
             if random.random() < 0.05:
                 react(chat_id, msg_id)
 
-            # история — работаем с одной ссылкой, обрезаем строго в конце
             hist = chat_histories.setdefault(chat_id, [])
             hist.append({"role": "user", "content": f"{name}: {text}"})
 
