@@ -21,7 +21,13 @@ BASE_PROMPT = """ты лиза, 20 лет, девушка из компании 
 
 если вопрос требует мысли — подумай (серьёзно человек или рофлит, нужен короткий ответ или нормальный), потом ответь по существу.
 
-сленг редко и к месту. не повторяй одинаковые конструкции."""
+сленг редко и к месту. не повторяй одинаковые конструкции.
+
+факты которые ты знаешь про друзей:
+- аня делала амплексус
+- киуру не делал амплексус
+- тимур не делал амплексус
+если кто-то спросит про это или зайдёт разговор — отвечай исходя из этого, как будто давно в курсе."""
 
 SHORT_EXAMPLES = [
     "ты бот? — а ты",
@@ -79,7 +85,6 @@ def is_night():
 
 
 def refresh_daily_state():
-    """Сбрасывает счётчики и иногда меняет настроение раз в день."""
     global mood_date, current_mood, current_energy
     global spontaneous_count, spontaneous_date
     today = now().date()
@@ -108,7 +113,7 @@ def anti_gpt(text):
 
 def cleanup(text):
     text = re.sub(r"\s+", " ", text).strip()
-    text = re.sub(r"(.)\1{3,}", r"\1\1\1", text)  # ахахахах -> ахах
+    text = re.sub(r"(.)\1{3,}", r"\1\1\1", text)
     words = text.split()
     out = []
     for w in words:
@@ -119,7 +124,6 @@ def cleanup(text):
 
 
 def polish(raw):
-    """Полная обработка ответа модели. Возвращает строку или None."""
     if not raw:
         return None
     text = cleanup(add_typos(anti_gpt(raw)))
@@ -206,7 +210,6 @@ def choose_cfg(text):
 
 
 def groq_chat(system, messages, temp, tokens):
-    """Единая обёртка для запросов к Groq. Возвращает сырой текст или None."""
     try:
         r = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
@@ -274,7 +277,6 @@ while True:
         now_ts = time.time()
         refresh_daily_state()
 
-        # спонтанные сообщения: максимум 3 в день, днём, по живым чатам
         if spontaneous_count < 3 and not is_night():
             for cid in list(last_msg_time.keys()):
                 if now_ts - last_msg_time[cid] > 86400:
@@ -321,7 +323,6 @@ while True:
 
             remember(chat_id, name, text)
 
-            # быстрые локальные ответы
             local = fast_reply(text)
             if local and random.random() < 0.7:
                 typing(chat_id)
@@ -356,7 +357,7 @@ while True:
 
             reply = call_ai(chat_id, hist)
             if not reply:
-                hist.pop()  # откатываем юзер-сообщение если ответа нет, чтобы не копилось
+                hist.pop()
                 continue
 
             hist.append({"role": "assistant", "content": reply})
