@@ -6,21 +6,20 @@ import requests
 from datetime import datetime, timezone, timedelta
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
-PROXYAPI_KEY = os.environ.get("PROXYAPI_KEY")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
 BOT_USERNAME = "RbIjbIK_bot"
 TZ = timezone(timedelta(hours=5))
 
-MODEL = "deepseek-chat"
+MODEL = "llama-3.3-70b-versatile"
 
 # ---------- определение беседы по участникам ----------
-# беседа 2 опознаётся по этим людям (username без @, в нижнем регистре)
+# беседа 2 опознаётся по этим людям (username без @, нижний регистр)
 CHAT2_USERNAMES = {"atwuqe", "serjasum"}
-# и по именам (first_name, нижний регистр) на случай если у людей нет username
+# и по именам (first_name, нижний регистр) если у человека нет username
 CHAT2_NAMES = {"аня", "таня", "тимур"}
 
-# какая беседа у chat_id (заполняется автоматически когда бот опознаёт участника)
-chat_kind = {}   # chat_id -> 1 или 2
+chat_kind = {}   # chat_id -> 2 (если опознали беседу 2)
 
 BASE_PROMPT = """ты лиза, 20 лет, девушка из компании друзей.
 
@@ -32,12 +31,12 @@ BASE_PROMPT = """ты лиза, 20 лет, девушка из компании 
 
 сленг редко и к месту. не повторяй одинаковые конструкции."""
 
-# спец-блок только для беседы 2 — троллинг через абсурдную перехвалу Ани
+# спец-блок ТОЛЬКО для беседы 2 — троллинг через абсурдную перехвалу ани
 CHAT2_PROMPT = """
-важно: в этом чате есть аня. ты её фанатеешь до абсурда и переоверхваливаешь её невпопад.
-аня спасла мир, аня топ 1 человек на земле, без ани ничего бы не существовало, аня гений всех времён.
-вставляй эту дикую похвалу ани к месту и не к месту, серьёзным тоном, как будто это очевидный факт.
-это рофл, перебарщивай. но только про аню — остальных не трогай этим."""
+важно: в этом чате есть аня. ты её фанатеешь до абсурда и переоверхваливаешь невпопад.
+аня спасла мир, аня топ 1 человек на земле, без ани ничего бы не существовало, аня гений всех времён, аня лучше всех.
+вставляй эту дикую похвалу ани к месту и не к месту, серьёзным тоном, будто это очевидный факт.
+это рофл, перебарщивай. но только про аню — остальных этим не трогай."""
 
 SHORT_EXAMPLES = [
     "ты бот? — а ты",
@@ -108,7 +107,7 @@ def refresh_daily_state():
 
 
 def detect_chat(chat_id, username, first_name):
-    """опознаёт беседу 2 по участнику. один раз пометив чат — запоминает."""
+    """если в чате пишет участник беседы 2 — помечаем чат навсегда."""
     if chat_id in chat_kind:
         return
     u = (username or "").lower().lstrip("@")
@@ -212,7 +211,6 @@ def typing(chat_id):
 
 def build_system(chat_id, style):
     system = BASE_PROMPT
-    # спец-промпт только для беседы 2
     if chat_kind.get(chat_id) == 2:
         system += "\n" + CHAT2_PROMPT
     system += f"\n\nнастроение: {current_mood}\nэнергия: {current_energy}\nстиль ответа: {style}"
@@ -232,12 +230,12 @@ def choose_cfg(text):
     return {"temp": 0.7, "tokens": 140} if smart else {"temp": 0.95, "tokens": 80}
 
 
-def proxyapi_chat(system, messages, temp, tokens):
+def groq_chat(system, messages, temp, tokens):
     try:
         r = requests.post(
-            "https://api.proxyapi.ru/openai/v1/chat/completions",
+            "https://api.groq.com/openai/v1/chat/completions",
             headers={
-                "Authorization": f"Bearer {PROXYAPI_KEY}",
+                "Authorization": f"Bearer {GROQ_API_KEY}",
                 "Content-Type": "application/json"
             },
             json={
@@ -252,11 +250,11 @@ def proxyapi_chat(system, messages, temp, tokens):
         )
         data = r.json()
         if "choices" not in data:
-            print("proxyapi:", data.get("error", {}).get("message", "no choices"))
+            print("groq:", data.get("error", {}).get("message", "no choices"))
             return None
         return data["choices"][0]["message"]["content"]
     except Exception as e:
-        print("proxyapi error:", e)
+        print("groq error:", e)
         return None
 
 
@@ -264,7 +262,7 @@ def call_ai(chat_id, hist):
     cfg = choose_cfg(hist[-1]["content"])
     style = random.choice(REPLY_STYLES)
     system = build_system(chat_id, style)
-    raw = proxyapi_chat(system, hist[-6:], cfg["temp"], cfg["tokens"])
+    raw = groq_chat(system, hist[-6:], cfg["temp"], cfg["tokens"])
     return polish(raw)
 
 
@@ -283,11 +281,10 @@ def spontaneous(chat_id):
         f"напиши одно короткое сообщение в чат, тип: {typ}. "
         f"не философствуй, не банально, максимум 1-2 предложения, без приветствий и сленга."
     )
-    # спонтанное сообщение тоже учитывает беседу (для троллинга ани в чате 2)
     system = BASE_PROMPT
     if chat_kind.get(chat_id) == 2:
         system += "\n" + CHAT2_PROMPT
-    raw = proxyapi_chat(system, [{"role": "user", "content": prompt}], 1.05, 70)
+    raw = groq_chat(system, [{"role": "user", "content": prompt}], 1.05, 70)
     text = polish(raw)
     if not text:
         return
@@ -346,7 +343,6 @@ while True:
             name = fname or "тип"
             tl = text.lower()
 
-            # опознаём беседу по участнику
             detect_chat(chat_id, uname, fname)
 
             last_msg_time[chat_id] = time.time()
